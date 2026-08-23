@@ -31,8 +31,10 @@ export function validateNip57(value: unknown): Nip57Result {
 		{ label: 'nostrPubkey is a valid BIP-340 public key', valid: curveValid }
 	];
 	if (!allowsPresent) return { status: 'not-supported', reason: 'allowsNostr is missing', items };
-	if (source.allowsNostr !== true)
+	if (source.allowsNostr === false)
 		return { status: 'not-supported', reason: 'allowsNostr is false', items };
+	if (source.allowsNostr !== true)
+		return { status: 'not-supported', reason: 'allowsNostr must be boolean true', items };
 	if (!pubkeyPresent)
 		return { status: 'invalid-advertisement', reason: 'nostrPubkey is missing', items };
 	if (!hex)

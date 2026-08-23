@@ -15,6 +15,14 @@ describe('NIP-57 validation', () => {
 			status: 'not-supported',
 			reason: 'allowsNostr is false'
 		}));
+	it.each(['true', 1])('reports non-boolean allowsNostr value %j accurately', (allowsNostr) => {
+		const result = validateNip57({ allowsNostr, nostrPubkey: generatorX });
+		expect(result).toMatchObject({
+			status: 'not-supported',
+			reason: 'allowsNostr must be boolean true'
+		});
+		expect(result.reason).not.toBe('allowsNostr is false');
+	});
 	it('reports a missing key', () =>
 		expect(validateNip57({ allowsNostr: true })).toMatchObject({
 			status: 'invalid-advertisement',
