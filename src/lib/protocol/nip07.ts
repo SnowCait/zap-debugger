@@ -30,7 +30,10 @@ export async function requestPublicKey(signer: Nip07Signer | undefined): Promise
 export async function requestSignature(
 	signer: Nip07Signer | undefined,
 	event: UnsignedNostrEvent
-): Promise<unknown> {
+): Promise<{ result: unknown; expectedUnsigned: UnsignedNostrEvent }> {
 	if (!signer) throw new Error('NIP-07 signer is not available');
-	return signer.signEvent(event);
+	const expectedUnsigned = structuredClone(event);
+	const eventForSigner = structuredClone(expectedUnsigned);
+	const result = await signer.signEvent(eventForSigner);
+	return { result, expectedUnsigned };
 }

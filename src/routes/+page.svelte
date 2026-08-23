@@ -181,13 +181,14 @@
 		signedRaw = undefined;
 		signedValidation = undefined;
 		try {
-			senderPubkey = await requestPublicKey(signer);
-			senderPubkeyValid = isValidXOnlyPubkey(senderPubkey);
+			const pubkey = await requestPublicKey(signer);
+			senderPubkey = pubkey;
+			senderPubkeyValid = isValidXOnlyPubkey(pubkey);
 			if (!senderPubkeyValid)
 				throw new Error('NIP-07 getPublicKey() returned an invalid NIP-01 public key');
-			const result = await requestSignature(signer, unsignedEvent);
+			const { result, expectedUnsigned } = await requestSignature(signer, unsignedEvent);
 			signedRaw = result;
-			signedValidation = validateSignedEvent(result, unsignedEvent, senderPubkey);
+			signedValidation = validateSignedEvent(result, expectedUnsigned, pubkey);
 		} catch (error) {
 			signError = error instanceof Error ? error.message : String(error);
 		} finally {
