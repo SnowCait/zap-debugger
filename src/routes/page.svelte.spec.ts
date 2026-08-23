@@ -34,8 +34,9 @@ describe('Zap debugger protocol boundaries', () => {
 			id: '0'.repeat(64),
 			sig: '0'.repeat(128)
 		}));
+		const getPublicKey = vi.fn().mockResolvedValue(pubkey);
 		window.nostr = {
-			getPublicKey: vi.fn().mockResolvedValue(pubkey),
+			getPublicKey,
 			signEvent
 		};
 
@@ -58,6 +59,7 @@ describe('Zap debugger protocol boundaries', () => {
 		await page.getByRole('button', { name: 'Sign with NIP-07' }).click();
 
 		expect(signEvent).toHaveBeenCalledOnce();
+		expect(getPublicKey).not.toHaveBeenCalled();
 		expect(signEvent.mock.calls[0]?.[0]).toMatchObject({ kind: 9734, content: '' });
 	});
 });

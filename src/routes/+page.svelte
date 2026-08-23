@@ -15,7 +15,6 @@
 	import { Nip07SigningController } from '$lib/protocol/nip07-signing';
 	import { parseRecipientPubkey, type RecipientPubkeyResult } from '$lib/protocol/nostr-key';
 	import type { UnsignedNostrEvent } from '$lib/protocol/nostr-event';
-	import type { SignedEventValidation } from '$lib/protocol/signed-event';
 	import {
 		parseRelays,
 		validateZapAmount,
@@ -45,12 +44,9 @@
 	let unsignedEvent = $state.raw<UnsignedNostrEvent>();
 	let unsignedValidation = $state<ValidationItem[]>();
 	let signerAvailable = $state(false);
-	let senderPubkey = $state<string>();
-	let senderPubkeyValid = $state(false);
 	let signing = $state(false);
 	let signError = $state<string>();
 	let signedRaw = $state<unknown>();
-	let signedValidation = $state<SignedEventValidation>();
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
 
@@ -66,11 +62,8 @@
 	function resetSigned() {
 		signingController.invalidate();
 		signing = false;
-		senderPubkey = undefined;
-		senderPubkeyValid = false;
 		signError = undefined;
 		signedRaw = undefined;
-		signedValidation = undefined;
 	}
 	function resetBuilt() {
 		unsignedEvent = undefined;
@@ -198,19 +191,11 @@
 		await signingController.sign(signer, unsignedEvent, {
 			onStart: () => {
 				signing = true;
-				senderPubkey = undefined;
-				senderPubkeyValid = false;
 				signError = undefined;
 				signedRaw = undefined;
-				signedValidation = undefined;
 			},
-			onPublicKey: (pubkey) => {
-				senderPubkey = pubkey;
-				senderPubkeyValid = true;
-			},
-			onSuccess: (result, validation) => {
+			onSuccess: (result) => {
 				signedRaw = result;
-				signedValidation = validation;
 			},
 			onError: (message) => {
 				signError = message;
@@ -533,7 +518,7 @@
 		{:else}<p class="muted">Validate Step 4, then explicitly build the Zap Request.</p>{/if}
 	</section>
 	<section>
-		<h2><span>6</span> Sign and validate with NIP-07</h2>
+		<h2><span>6</span> Sign Zap Request with NIP-07</h2>
 		{#if unsignedEvent}
 			<div class="grid">
 				<div>
@@ -545,10 +530,6 @@
 						>Check NIP-07 availability</button
 					>
 					<dl>
-						<dt>Sender pubkey</dt>
-						<dd class="break">{senderPubkey ?? '(not requested)'}</dd>
-						<dt>Sender pubkey valid</dt>
-						<dd>{senderPubkey ? (senderPubkeyValid ? 'Yes' : 'No') : '(not checked)'}</dd>
 						<dt>Recipient pubkey</dt>
 						<dd class="break">{recipientResult?.normalized}</dd>
 					</dl>
@@ -569,24 +550,9 @@
 				</div>
 			</div>
 			{#if signedRaw !== undefined}
-				<div class="raw-grid result grid">
-					<div>
-						<h3>Signed event raw JSON</h3>
-						<pre>{formattedJson(signedRaw)}</pre>
-					</div>
-					<div>
-						<h3>Independent validation</h3>
-						<ul class="checks">
-							{#each signedValidation?.items ?? [] as item (item.label)}<li
-									class:failed={!item.valid}
-								>
-									{item.valid ? '✓' : '✕'}
-									{item.label}
-								</li>{/each}
-						</ul>
-						<h3>Calculated event id</h3>
-						<pre>{signedValidation?.calculatedId ?? '(unavailable)'}</pre>
-					</div>
+				<div class="result">
+					<h3>Signed event raw JSON</h3>
+					<pre>{formattedJson(signedRaw)}</pre>
 				</div>
 			{/if}
 		{:else}<p class="muted">Build and validate an unsigned event in Step 5 first.</p>{/if}

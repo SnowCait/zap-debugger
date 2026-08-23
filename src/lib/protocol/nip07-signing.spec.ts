@@ -1,14 +1,7 @@
-import { schnorr } from '@noble/curves/secp256k1.js';
-import { bytesToHex, hexToBytes } from '@noble/hashes/utils.js';
 import { describe, expect, it, vi } from 'vitest';
-import { calculateEventId } from './nip01';
 import type { Nip07Signer } from './nip07';
 import { Nip07SigningController, type SigningHooks } from './nip07-signing';
 import type { SignedNostrEvent, UnsignedNostrEvent } from './nostr-event';
-import type { SignedEventValidation } from './signed-event';
-
-const secretKey = hexToBytes('0000000000000000000000000000000000000000000000000000000000000003');
-const pubkey = bytesToHex(schnorr.getPublicKey(secretKey));
 
 function event(amount: string): UnsignedNostrEvent {
 	return {
@@ -19,13 +12,12 @@ function event(amount: string): UnsignedNostrEvent {
 	};
 }
 
-function sign(unsigned: UnsignedNostrEvent): SignedNostrEvent {
-	const id = calculateEventId(pubkey, unsigned);
+function signed(unsigned: UnsignedNostrEvent): SignedNostrEvent {
 	return {
 		...structuredClone(unsigned),
-		pubkey,
-		id,
-		sig: bytesToHex(schnorr.sign(hexToBytes(id), secretKey, new Uint8Array(32)))
+		pubkey: 'a'.repeat(64),
+		id: 'b'.repeat(64),
+		sig: 'c'.repeat(128)
 	};
 }
 
@@ -40,136 +32,121 @@ function deferred<T>() {
 }
 
 function stateHooks() {
-	const state: {
-		signing: boolean;
-		pubkey?: string;
-		result?: unknown;
-		validation?: SignedEventValidation;
-		error?: string;
-	} = { signing: false };
+	const state: { signing: boolean; result?: unknown; error?: string } = { signing: false };
 	const hooks: SigningHooks = {
 		onStart: () => {
 			state.signing = true;
-			state.pubkey = undefined;
 			state.result = undefined;
-			state.validation = undefined;
 			state.error = undefined;
 		},
-		onPublicKey: (value) => (state.pubkey = value),
-		onSuccess: (result, validation) => {
+		onSuccess: (result) => {
 			state.result = result;
-			state.validation = validation;
 		},
-		onError: (message) => (state.error = message),
-		onFinish: () => (state.signing = false)
+		onError: (message) => {
+			state.error = message;
+		},
+		onFinish: () => {
+			state.signing = false;
+		}
 	};
 	return { state, hooks };
 }
 
-async function nextMicrotasks(): Promise<void> {
-	await Promise.resolve();
-	await Promise.resolve();
-}
-
 describe('Nip07SigningController', () => {
-	it('does not sign a new current event when invalidated during getPublicKey()', async () => {
-		const publicKey = deferred<string>();
-		const signer: Nip07Signer = {
-			getPublicKey: vi.fn(() => publicKey.promise),
-			signEvent: vi.fn()
-		};
+	it('does not commit a signed result after invalidation during signEvent()', async () => {
+		const signature = deferred<SignedNostrEvent>();
+		const signer: Nip07Signer = { signEvent: vi.fn(() => signature.promise) };
 		const controller = new Nip07SigningController();
 		const { state, hooks } = stateHooks();
 		const eventA = event('1000');
-		const eventB = event('2000');
 		const attempt = controller.sign(signer, eventA, hooks);
 
 		controller.invalidate();
 		state.signing = false;
-		publicKey.resolve(pubkey);
+		signature.resolve(signed(eventA));
 		await attempt;
 
-		expect(eventB.tags).toEqual([['amount', '2000']]);
-		expect(signer.signEvent).not.toHaveBeenCalled();
 		expect(state.result).toBeUndefined();
-		expect(state.validation).toBeUndefined();
 		expect(state.error).toBeUndefined();
 	});
 
-	it('does not commit a signed result after invalidation during signEvent()', async () => {
-		const signature = deferred<unknown>();
-		const signer: Nip07Signer = {
-			getPublicKey: vi.fn().mockResolvedValue(pubkey),
-			signEvent: vi.fn(() => signature.promise)
-		};
+	it('does not commit a stale rejection', async () => {
+		const signature = deferred<SignedNostrEvent>();
 		const controller = new Nip07SigningController();
 		const { state, hooks } = stateHooks();
-		const eventA = event('1000');
-		const attempt = controller.sign(signer, eventA, hooks);
-		await nextMicrotasks();
-		expect(signer.signEvent).toHaveBeenCalledOnce();
+		const attempt = controller.sign({ signEvent: () => signature.promise }, event('1000'), hooks);
 
 		controller.invalidate();
 		state.signing = false;
-		state.pubkey = undefined;
-		signature.resolve(sign(eventA));
+		signature.reject(new Error('Old rejection'));
 		await attempt;
 
-		expect(state.result).toBeUndefined();
-		expect(state.validation).toBeUndefined();
 		expect(state.error).toBeUndefined();
-		expect(state.pubkey).toBeUndefined();
+		expect(state.result).toBeUndefined();
 	});
 
 	it('does not let an old attempt finish a newer pending attempt', async () => {
-		const oldPublicKey = deferred<string>();
-		const newSignature = deferred<unknown>();
-		const oldSigner: Nip07Signer = {
-			getPublicKey: vi.fn(() => oldPublicKey.promise),
-			signEvent: vi.fn()
-		};
-		const newSigner: Nip07Signer = {
-			getPublicKey: vi.fn().mockResolvedValue(pubkey),
-			signEvent: vi.fn(() => newSignature.promise)
-		};
+		const oldSignature = deferred<SignedNostrEvent>();
+		const newSignature = deferred<SignedNostrEvent>();
 		const controller = new Nip07SigningController();
 		const { state, hooks } = stateHooks();
-		const oldAttempt = controller.sign(oldSigner, event('1000'), hooks);
+		const eventA = event('1000');
+		const eventB = event('2000');
+		const oldAttempt = controller.sign({ signEvent: () => oldSignature.promise }, eventA, hooks);
 
 		controller.invalidate();
 		state.signing = false;
-		const eventB = event('2000');
-		const newAttempt = controller.sign(newSigner, eventB, hooks);
-		await nextMicrotasks();
-		expect(state.signing).toBe(true);
-
-		oldPublicKey.resolve(pubkey);
+		const newAttempt = controller.sign({ signEvent: () => newSignature.promise }, eventB, hooks);
+		oldSignature.resolve(signed(eventA));
 		await oldAttempt;
-		expect(state.signing).toBe(true);
-		expect(state.error).toBeUndefined();
 
-		newSignature.resolve(sign(eventB));
+		expect(state.signing).toBe(true);
+		expect(state.result).toBeUndefined();
+
+		const signedB = signed(eventB);
+		newSignature.resolve(signedB);
 		await newAttempt;
 		expect(state.signing).toBe(false);
-		expect(state.validation?.valid).toBe(true);
+		expect(state.result).toBe(signedB);
 	});
 
-	it('commits and validates a normal signing attempt', async () => {
-		const signer: Nip07Signer = {
-			getPublicKey: vi.fn().mockResolvedValue(pubkey),
-			signEvent: vi.fn().mockImplementation(async (value: UnsignedNostrEvent) => sign(value))
-		};
+	it('preserves the unsigned event when signEvent rejects and permits retry', async () => {
 		const controller = new Nip07SigningController();
 		const { state, hooks } = stateHooks();
 		const unsigned = event('1000');
+		const signer: Nip07Signer = {
+			signEvent: vi.fn().mockRejectedValueOnce(new Error('User rejected'))
+		};
+
+		await controller.sign(signer, unsigned, hooks);
+		expect(state.error).toBe('User rejected');
+		expect(state.result).toBeUndefined();
+		expect(unsigned).toEqual(event('1000'));
+
+		const result = signed(unsigned);
+		vi.mocked(signer.signEvent).mockResolvedValueOnce(result);
+		await controller.sign(signer, unsigned, hooks);
+		expect(state.error).toBeUndefined();
+		expect(state.result).toBe(result);
+	});
+
+	it('isolates application state while accepting the signer result without auditing it', async () => {
+		const unsigned = event('1000');
+		const signer: Nip07Signer = {
+			signEvent: vi.fn().mockImplementation(async (input) => {
+				input.tags[0]?.push('mutated-by-provider');
+				return signed(input);
+			})
+		};
+		const controller = new Nip07SigningController();
+		const { state, hooks } = stateHooks();
 
 		await controller.sign(signer, unsigned, hooks);
 
-		expect(state.signing).toBe(false);
-		expect(state.pubkey).toBe(pubkey);
-		expect(state.result).toBeDefined();
-		expect(state.validation?.valid).toBe(true);
-		expect(state.error).toBeUndefined();
 		expect(unsigned).toEqual(event('1000'));
+		expect(signer.signEvent).toHaveBeenCalledOnce();
+		expect(state.result).toMatchObject({ tags: [['amount', '1000', 'mutated-by-provider']] });
+		expect(state.error).toBeUndefined();
+		expect(state.signing).toBe(false);
 	});
 });
