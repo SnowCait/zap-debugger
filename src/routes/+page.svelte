@@ -10,14 +10,11 @@
 	import { validateLud06, type Lud06Result } from '$lib/protocol/lud06';
 	import { resolveLnurlPayEndpoint, type LnurlPayEndpoint } from '$lib/protocol/lud16';
 	import { validateNip57, type Nip57Result } from '$lib/protocol/nip57';
-	import { getNip07Signer, requestPublicKey, requestSignature } from '$lib/protocol/nip07';
-	import {
-		isValidXOnlyPubkey,
-		parseRecipientPubkey,
-		type RecipientPubkeyResult
-	} from '$lib/protocol/nostr-key';
+	import { getNip07Signer } from '$lib/protocol/nip07';
+	import { Nip07SigningController } from '$lib/protocol/nip07-signing';
+	import { parseRecipientPubkey, type RecipientPubkeyResult } from '$lib/protocol/nostr-key';
 	import type { UnsignedNostrEvent } from '$lib/protocol/nostr-event';
-	import { validateSignedEvent, type SignedEventValidation } from '$lib/protocol/signed-event';
+	import type { SignedEventValidation } from '$lib/protocol/signed-event';
 	import {
 		parseRelays,
 		validateZapAmount,
@@ -52,6 +49,7 @@
 	let signError = $state<string>();
 	let signedRaw = $state<unknown>();
 	let signedValidation = $state<SignedEventValidation>();
+	const signingController = new Nip07SigningController();
 
 	onMount(() => {
 		refreshSignerAvailability();
@@ -63,6 +61,8 @@
 	}
 
 	function resetSigned() {
+		signingController.invalidate();
+		signing = false;
 		senderPubkey = undefined;
 		senderPubkeyValid = false;
 		signError = undefined;
@@ -176,24 +176,30 @@
 			signError = 'NIP-07 signer is not available';
 			return;
 		}
-		signing = true;
-		signError = undefined;
-		signedRaw = undefined;
-		signedValidation = undefined;
-		try {
-			const pubkey = await requestPublicKey(signer);
-			senderPubkey = pubkey;
-			senderPubkeyValid = isValidXOnlyPubkey(pubkey);
-			if (!senderPubkeyValid)
-				throw new Error('NIP-07 getPublicKey() returned an invalid NIP-01 public key');
-			const { result, expectedUnsigned } = await requestSignature(signer, unsignedEvent);
-			signedRaw = result;
-			signedValidation = validateSignedEvent(result, expectedUnsigned, pubkey);
-		} catch (error) {
-			signError = error instanceof Error ? error.message : String(error);
-		} finally {
-			signing = false;
-		}
+		await signingController.sign(signer, unsignedEvent, {
+			onStart: () => {
+				signing = true;
+				senderPubkey = undefined;
+				senderPubkeyValid = false;
+				signError = undefined;
+				signedRaw = undefined;
+				signedValidation = undefined;
+			},
+			onPublicKey: (pubkey) => {
+				senderPubkey = pubkey;
+				senderPubkeyValid = true;
+			},
+			onSuccess: (result, validation) => {
+				signedRaw = result;
+				signedValidation = validation;
+			},
+			onError: (message) => {
+				signError = message;
+			},
+			onFinish: () => {
+				signing = false;
+			}
+		});
 	}
 	const formattedJson = (value: unknown) => JSON.stringify(value, null, 2);
 	const zapReady = () =>
