@@ -18,15 +18,15 @@ export default defineConfig({
 			},
 			adapter: adapter({ fallback: '404.html' }),
 			paths: {
-				base: basePath,
-				relative: false
+				base: basePath
 			}
 		}),
 
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
-			emitTsDeclarations: true
+			emitTsDeclarations: true,
+			strategy: ['preferredLanguage', 'baseLocale']
 		})
 	],
 	test: {
