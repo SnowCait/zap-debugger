@@ -5,7 +5,7 @@ export type LnurlPayEndpoint = LightningAddress & { scheme: 'http' | 'https'; ur
 export function resolveLnurlPayEndpoint(address: LightningAddress): LnurlPayEndpoint {
 	if (!address.username || !address.domain)
 		throw new Error('A validated Lightning Address is required.');
-	const scheme = address.domain.endsWith('.onion') ? 'http' : 'https';
+	const scheme = address.domain.toLowerCase().endsWith('.onion') ? 'http' : 'https';
 	return {
 		...address,
 		scheme,

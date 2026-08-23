@@ -40,12 +40,16 @@ describe('LUD-16 endpoint resolution', () => {
 			url: 'https://example.com/.well-known/lnurlp/alice+tip'
 		});
 	});
-	it('resolves onion domains over HTTP', () => {
-		const address = { address: 'alice@service.onion', username: 'alice', domain: 'service.onion' };
-		expect(resolveLnurlPayEndpoint(address).url).toBe(
-			'http://service.onion/.well-known/lnurlp/alice'
-		);
-	});
+	it.each(['service.onion', 'SERVICE.ONION', 'service.OnIoN'])(
+		'resolves the onion domain %s over HTTP',
+		(domain) => {
+			const address = { address: `alice@${domain}`, username: 'alice', domain };
+			expect(resolveLnurlPayEndpoint(address)).toMatchObject({
+				scheme: 'http',
+				url: `http://${domain}/.well-known/lnurlp/alice`
+			});
+		}
+	);
 	it('does not resolve invalid parsed input', () => {
 		expect(parseLightningAddress('Alice@example.com').valid).toBe(false);
 		expect(() => resolveLnurlPayEndpoint({ address: 'x', username: '', domain: '' })).toThrow();

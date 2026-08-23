@@ -19,6 +19,8 @@ const record = (value: unknown): value is Record<string, unknown> =>
 const amount = (value: unknown): value is number =>
 	typeof value === 'number' && Number.isSafeInteger(value);
 const parsedAmount = (value: unknown): number | undefined => (amount(value) ? value : undefined);
+const imageTypes = new Set(['image/png;base64', 'image/jpeg;base64']);
+const imageCharacterLimit = 136_536;
 
 export function validateLud06(value: unknown): Lud06Result {
 	if (record(value) && value.status === 'ERROR' && typeof value.reason === 'string') {
@@ -37,12 +39,22 @@ export function validateLud06(value: unknown): Lud06Result {
 	}
 	const metadataEntriesValid =
 		Array.isArray(parsedMetadata) &&
-		parsedMetadata.every(
-			(entry) => Array.isArray(entry) && entry.length >= 2 && typeof entry[0] === 'string'
-		);
+		parsedMetadata.every((entry) => Array.isArray(entry) && typeof entry[0] === 'string');
 	const metadataArray = Array.isArray(parsedMetadata) ? parsedMetadata : [];
-	const hasPlainText =
-		metadataEntriesValid && metadataArray.some((entry: unknown[]) => entry[0] === 'text/plain');
+	const entries = metadataEntriesValid ? (metadataArray as MetadataEntry[]) : [];
+	const plainTextEntries = entries.filter((entry) => entry[0] === 'text/plain');
+	const longDescriptionEntries = entries.filter((entry) => entry[0] === 'text/long-desc');
+	const imageEntries = entries.filter((entry) => imageTypes.has(entry[0]));
+	const hasOnePlainText = plainTextEntries.length === 1;
+	const plainTextValueValid =
+		hasOnePlainText && plainTextEntries.every((entry) => typeof entry[1] === 'string');
+	const longDescriptionValuesValid = longDescriptionEntries.every(
+		(entry) => typeof entry[1] === 'string'
+	);
+	const imageValuesAreStrings = imageEntries.every((entry) => typeof entry[1] === 'string');
+	const imageValuesWithinLimit = imageEntries.every(
+		(entry) => typeof entry[1] === 'string' && entry[1].length <= imageCharacterLimit
+	);
 	let callbackValid = false;
 	if (typeof source.callback === 'string') {
 		try {
@@ -74,7 +86,18 @@ export function validateLud06(value: unknown): Lud06Result {
 			label: 'every metadata entry is an array beginning with a type string',
 			valid: metadataEntriesValid
 		},
-		{ label: 'metadata contains text/plain', valid: hasPlainText }
+		{ label: 'metadata contains exactly one text/plain entry', valid: hasOnePlainText },
+		{ label: 'text/plain value is a string', valid: plainTextValueValid },
+		{ label: 'text/long-desc values are strings when present', valid: longDescriptionValuesValid },
+		{
+			label: 'image metadata uses at most one PNG or JPEG entry',
+			valid: imageEntries.length <= 1
+		},
+		{ label: 'image metadata values are strings', valid: imageValuesAreStrings },
+		{
+			label: `image metadata values are at most ${imageCharacterLimit} characters`,
+			valid: imageValuesWithinLimit
+		}
 	];
 	return {
 		kind: 'payRequest',

@@ -18,13 +18,10 @@ export async function fetchLnurlPay(
 		inspection.status = response.status;
 		inspection.statusText = response.statusText;
 		inspection.rawBody = await response.text();
-		if (!response.ok) inspection.error = `HTTP request failed with status ${response.status}.`;
 		try {
 			inspection.json = JSON.parse(inspection.rawBody);
 		} catch {
-			inspection.error = inspection.error
-				? `${inspection.error} Response body is not valid JSON.`
-				: 'Response body is not valid JSON.';
+			inspection.error = 'Response body is not valid JSON.';
 		}
 	} catch (error) {
 		const detail = error instanceof Error ? ` ${error.message}` : '';
