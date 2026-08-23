@@ -44,6 +44,8 @@
 		"vitest-browser-svelte": "^2.1.1"
 	},
 	"dependencies": {
-		"@noble/curves": "^2.3.0"
+		"@noble/curves": "^2.3.0",
+		"@noble/hashes": "^2.3.0",
+		"@scure/base": "^2.3.0"
 	}
 }

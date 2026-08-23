@@ -76,10 +76,11 @@ section {
 }
 label {
 	display: block;
-	margin-bottom: 0.45rem;
+	margin: 0.85rem 0 0.45rem;
 	font-weight: 650;
 }
-input {
+input,
+textarea {
 	box-sizing: border-box;
 	width: 100%;
 	padding: 0.8rem 0.9rem;
@@ -90,7 +91,11 @@ input {
 	color: #fff;
 	font: inherit;
 }
-input:focus {
+textarea {
+	resize: vertical;
+}
+input:focus,
+textarea:focus {
 	border-color: #5eead4;
 	box-shadow: 0 0 0 3px #5eead429;
 }
@@ -107,6 +112,14 @@ button {
 }
 button:hover:not(:disabled) {
 	background: #99f6e4;
+}
+button.secondary {
+	border: 1px solid #5eead4;
+	background: transparent;
+	color: #99f6e4;
+}
+button.secondary:hover:not(:disabled) {
+	background: #15363a;
 }
 button:focus-visible {
 	outline: 3px solid #fff;
@@ -178,6 +191,12 @@ pre {
 }
 .muted {
 	color: #7f8da2;
+}
+.notice {
+	padding: 0.75rem 1rem;
+	border: 1px solid #3b4c65;
+	border-radius: 0.4rem;
+	background: #101d30;
 }
 .break {
 	overflow-wrap: anywhere;
