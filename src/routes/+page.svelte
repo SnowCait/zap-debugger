@@ -1,15 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchLnurlPay, type HttpInspection } from '$lib/protocol/http';
+	import type { HttpInspection } from '$lib/protocol/http';
+	import { LnurlPayFetchController } from '$lib/protocol/lnurl-pay-fetch';
 	import { encodeLnurl } from '$lib/protocol/lnurl-bech32';
 	import {
 		parseLightningAddress,
 		type AddressParseResult,
 		type LightningAddress
 	} from '$lib/protocol/lightning-address';
-	import { validateLud06, type Lud06Result } from '$lib/protocol/lud06';
+	import type { Lud06Result } from '$lib/protocol/lud06';
 	import { resolveLnurlPayEndpoint, type LnurlPayEndpoint } from '$lib/protocol/lud16';
-	import { validateNip57, type Nip57Result } from '$lib/protocol/nip57';
+	import type { Nip57Result } from '$lib/protocol/nip57';
 	import { getNip07Signer } from '$lib/protocol/nip07';
 	import { Nip07SigningController } from '$lib/protocol/nip07-signing';
 	import { parseRecipientPubkey, type RecipientPubkeyResult } from '$lib/protocol/nostr-key';
@@ -32,6 +33,7 @@
 	let lud06 = $state<Lud06Result>();
 	let nip57 = $state<Nip57Result>();
 	let loading = $state(false);
+	let fetchedEndpointUrl = $state<string>();
 	let recipientInput = $state('');
 	let amountInput = $state('');
 	let relaysInput = $state('');
@@ -50,6 +52,7 @@
 	let signedRaw = $state<unknown>();
 	let signedValidation = $state<SignedEventValidation>();
 	const signingController = new Nip07SigningController();
+	const fetchController = new LnurlPayFetchController();
 
 	onMount(() => {
 		refreshSignerAvailability();
@@ -83,9 +86,12 @@
 	}
 
 	function resetFetch() {
+		fetchController.invalidate();
+		loading = false;
 		http = undefined;
 		lud06 = undefined;
 		nip57 = undefined;
+		fetchedEndpointUrl = undefined;
 		resetZap();
 	}
 	function changeInput(value: string) {
@@ -109,14 +115,21 @@
 	}
 	async function runGet() {
 		if (!endpoint) return;
-		loading = true;
 		resetFetch();
-		http = await fetchLnurlPay(endpoint.url);
-		if (http.json !== undefined) {
-			lud06 = validateLud06(http.json);
-			if (lud06.kind === 'payRequest' && lud06.valid) nip57 = validateNip57(http.json);
-		}
-		loading = false;
+		await fetchController.run(endpoint, {
+			onStart: () => {
+				loading = true;
+			},
+			onSuccess: (result) => {
+				fetchedEndpointUrl = result.endpoint.url;
+				http = result.http;
+				lud06 = result.lud06;
+				nip57 = result.nip57;
+			},
+			onFinish: () => {
+				loading = false;
+			}
+		});
 	}
 	function changeZapParameter(field: 'recipient' | 'amount' | 'relays' | 'comment', value: string) {
 		if (field === 'recipient') recipientInput = value;
@@ -126,7 +139,13 @@
 		resetZap();
 	}
 	function validateZapParameters() {
-		if (lud06?.kind !== 'payRequest' || !lud06.valid || nip57?.status !== 'supported' || !endpoint)
+		if (
+			lud06?.kind !== 'payRequest' ||
+			!lud06.valid ||
+			nip57?.status !== 'supported' ||
+			!endpoint ||
+			fetchedEndpointUrl !== endpoint.url
+		)
 			return;
 		const { minSendable, maxSendable, callback } = lud06.data;
 		if (minSendable === undefined || maxSendable === undefined || callback === undefined) return;
@@ -207,6 +226,7 @@
 		lud06.valid &&
 		nip57?.status === 'supported' &&
 		endpoint !== undefined &&
+		fetchedEndpointUrl === endpoint.url &&
 		lud06.data.callback !== undefined &&
 		lud06.data.minSendable !== undefined &&
 		lud06.data.maxSendable !== undefined;
