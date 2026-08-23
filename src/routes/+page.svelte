@@ -28,7 +28,7 @@
 	let input = $state('');
 	let addressResult = $state<AddressParseResult>();
 	let address = $state<LightningAddress>();
-	let endpoint = $state<LnurlPayEndpoint>();
+	let endpoint = $state.raw<LnurlPayEndpoint>();
 	let http = $state<HttpInspection>();
 	let lud06 = $state<Lud06Result>();
 	let nip57 = $state<Nip57Result>();
@@ -42,7 +42,7 @@
 	let amountResult = $state<AmountValidation>();
 	let relayResult = $state<RelayValidation>();
 	let encodedLnurl = $state<string>();
-	let unsignedEvent = $state<UnsignedNostrEvent>();
+	let unsignedEvent = $state.raw<UnsignedNostrEvent>();
 	let unsignedValidation = $state<ValidationItem[]>();
 	let signerAvailable = $state(false);
 	let senderPubkey = $state<string>();
