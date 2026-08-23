@@ -7,6 +7,10 @@
 	import favicon from '$lib/assets/favicon.svg';
 
 	let { children } = $props();
+
+	function localeHref(locale: (typeof locales)[number]) {
+		return resolve(localizeHref(page.route.id ?? '/', { locale }) as Pathname);
+	}
 </script>
 
 <svelte:head><link rel="icon" href={favicon} /></svelte:head>
@@ -14,6 +18,6 @@
 
 <div style="display:none">
 	{#each locales as locale (locale)}
-		<a href={resolve(localizeHref(page.url.pathname, { locale }) as Pathname)}>{locale}</a>
+		<a href={localeHref(locale)}>{locale}</a>
 	{/each}
 </div>
