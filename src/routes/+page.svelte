@@ -22,6 +22,8 @@
 		type RelayValidation
 	} from '$lib/protocol/zap-parameters';
 	import { buildZapRequest, validateZapRequest } from '$lib/protocol/zap-request';
+	import type { ZapCallbackResult } from '$lib/protocol/zap-callback';
+	import { ZapCallbackFetchController } from '$lib/protocol/zap-callback-fetch';
 	import type { ValidationItem } from '$lib/protocol/validation';
 
 	let input = $state('');
@@ -47,8 +49,13 @@
 	let signing = $state(false);
 	let signError = $state<string>();
 	let signedRaw = $state<unknown>();
+	let callbackLoading = $state(false);
+	let callbackRequestUrl = $state<string>();
+	let callbackHttp = $state<HttpInspection>();
+	let callbackResult = $state<ZapCallbackResult>();
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
+	const callbackController = new ZapCallbackFetchController();
 
 	onMount(() => {
 		refreshSignerAvailability();
@@ -59,11 +66,19 @@
 		else if (signError === 'NIP-07 signer is not available') signError = undefined;
 	}
 
+	function resetCallback() {
+		callbackController.invalidate();
+		callbackLoading = false;
+		callbackRequestUrl = undefined;
+		callbackHttp = undefined;
+		callbackResult = undefined;
+	}
 	function resetSigned() {
 		signingController.invalidate();
 		signing = false;
 		signError = undefined;
 		signedRaw = undefined;
+		resetCallback();
 	}
 	function resetBuilt() {
 		unsignedEvent = undefined;
@@ -190,6 +205,7 @@
 		}
 		await signingController.sign(signer, unsignedEvent, {
 			onStart: () => {
+				resetCallback();
 				signing = true;
 				signError = undefined;
 				signedRaw = undefined;
@@ -204,6 +220,40 @@
 				signing = false;
 			}
 		});
+	}
+	async function getCallback() {
+		if (
+			signedRaw === undefined ||
+			amountResult?.amount === undefined ||
+			encodedLnurl === undefined ||
+			lud06?.kind !== 'payRequest' ||
+			lud06.data.callback === undefined
+		)
+			return;
+		await callbackController.run(
+			{
+				callback: lud06.data.callback,
+				amount: amountResult.amount.toString(),
+				signedZapRequest: signedRaw,
+				encodedLnurl
+			},
+			{
+				onStart: (requestUrl) => {
+					callbackLoading = true;
+					callbackRequestUrl = requestUrl;
+					callbackHttp = undefined;
+					callbackResult = undefined;
+				},
+				onSuccess: (result) => {
+					callbackRequestUrl = result.requestUrl;
+					callbackHttp = result.http;
+					callbackResult = result.callback;
+				},
+				onFinish: () => {
+					callbackLoading = false;
+				}
+			}
+		);
 	}
 	const formattedJson = (value: unknown) => JSON.stringify(value, null, 2);
 	const zapReady = () =>
@@ -556,5 +606,76 @@
 				</div>
 			{/if}
 		{:else}<p class="muted">Build and validate an unsigned event in Step 5 first.</p>{/if}
+	</section>
+	<section>
+		<h2><span>7</span> GET Zap callback</h2>
+		{#if signedRaw !== undefined && amountResult?.amount !== undefined && encodedLnurl && lud06?.kind === 'payRequest' && lud06.data.callback}
+			<div class="output">
+				<h3>Callback input</h3>
+				<dl>
+					<dt>Callback URL</dt>
+					<dd class="break">{lud06.data.callback}</dd>
+					<dt>Amount (msat)</dt>
+					<dd>{amountResult.amount}</dd>
+					<dt>Encoded LNURL</dt>
+					<dd class="break">{encodedLnurl}</dd>
+				</dl>
+				<h3>Signed Zap Request</h3>
+				<pre>{formattedJson(signedRaw)}</pre>
+				<button onclick={getCallback} disabled={callbackLoading}
+					>{callbackLoading ? 'Requesting…' : 'GET callback'}</button
+				>
+			</div>
+			{#if callbackRequestUrl}
+				<div class="result">
+					<h3>HTTP request</h3>
+					<dl>
+						<dt>Method</dt>
+						<dd>GET</dd>
+						<dt>Final request URL</dt>
+						<dd class="break">{callbackRequestUrl}</dd>
+					</dl>
+					{#if callbackHttp}
+						{#if callbackHttp.error}<p class="errors" role="alert">✕ {callbackHttp.error}</p>{/if}
+						{#if callbackHttp.status !== undefined}
+							<h3>HTTP response</h3>
+							<dl>
+								<dt>Status</dt>
+								<dd>{callbackHttp.status}</dd>
+								<dt>Status text</dt>
+								<dd>{callbackHttp.statusText || '(empty)'}</dd>
+							</dl>
+						{/if}
+						<div class="raw-grid grid">
+							<div>
+								<h3>Raw response body</h3>
+								<pre>{callbackHttp.rawBody ?? '(unavailable)'}</pre>
+							</div>
+							<div>
+								<h3>Parsed JSON</h3>
+								<pre>{callbackHttp.json === undefined
+										? '(unavailable)'
+										: formattedJson(callbackHttp.json)}</pre>
+							</div>
+						</div>
+						{#if callbackResult?.kind === 'invoice'}
+							<h3>Lightning invoice (pr)</h3>
+							<pre>{callbackResult.pr}</pre>
+						{:else if callbackResult?.kind === 'error'}
+							<h3>LUD-06 application error</h3>
+							<dl>
+								<dt>Reason</dt>
+								<dd class="break">{callbackResult.reason}</dd>
+							</dl>
+						{:else if callbackResult?.kind === 'missing'}
+							<p class="errors" role="alert">✕ Invoice not received: {callbackResult.reason}</p>
+						{/if}
+					{/if}
+				</div>
+			{/if}
+		{:else}<p class="muted">
+				Sign the Zap Request in Step 6 first. The callback is only requested when you explicitly
+				continue.
+			</p>{/if}
 	</section>
 </main>

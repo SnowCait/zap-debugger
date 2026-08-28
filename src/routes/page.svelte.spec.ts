@@ -21,12 +21,17 @@ describe('Zap debugger protocol boundaries', () => {
 			allowsNostr: true,
 			nostrPubkey: pubkey
 		};
-		const fetcher = vi.fn().mockResolvedValue(
-			new Response(JSON.stringify(payResponse), {
-				status: 200,
-				statusText: 'OK'
-			})
-		);
+		const fetcher = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify(payResponse), { status: 200, statusText: 'OK' })
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ pr: 'lnbc1testinvoice', routes: [] }), {
+					status: 200,
+					statusText: 'OK'
+				})
+			);
 		vi.stubGlobal('fetch', fetcher);
 		const signEvent = vi.fn().mockImplementation(async (event) => ({
 			...event,
@@ -61,5 +66,18 @@ describe('Zap debugger protocol boundaries', () => {
 		expect(signEvent).toHaveBeenCalledOnce();
 		expect(getPublicKey).not.toHaveBeenCalled();
 		expect(signEvent.mock.calls[0]?.[0]).toMatchObject({ kind: 9734, content: '' });
+
+		await page.getByRole('button', { name: 'GET callback' }).click();
+		expect(fetcher).toHaveBeenCalledTimes(2);
+		const callbackUrl = new URL(fetcher.mock.calls[1]?.[0] as string);
+		expect(`${callbackUrl.origin}${callbackUrl.pathname}`).toBe('https://example.com/callback');
+		expect(callbackUrl.searchParams.get('amount')).toBe('1000');
+		expect(callbackUrl.searchParams.get('lnurl')).toMatch(/^lnurl1/);
+		expect(JSON.parse(callbackUrl.searchParams.get('nostr') ?? '')).toMatchObject({
+			kind: 9734,
+			id: '0'.repeat(64),
+			sig: '0'.repeat(128)
+		});
+		await expect.element(page.getByText('lnbc1testinvoice')).toBeInTheDocument();
 	});
 });
