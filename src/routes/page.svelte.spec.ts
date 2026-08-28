@@ -11,7 +11,7 @@ afterEach(() => {
 });
 
 describe('Zap debugger protocol boundaries', () => {
-	it('passes raw endpoint and unsigned-event state to structured-cloning controllers', async () => {
+	it('passes raw endpoint, unsigned event, and signed event to structured-cloning controllers', async () => {
 		const payResponse = {
 			tag: 'payRequest',
 			callback: 'https://example.com/callback',

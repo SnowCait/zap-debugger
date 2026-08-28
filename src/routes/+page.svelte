@@ -48,7 +48,7 @@
 	let signerAvailable = $state(false);
 	let signing = $state(false);
 	let signError = $state<string>();
-	let signedRaw = $state<unknown>();
+	let signedRaw = $state.raw<unknown>();
 	let callbackLoading = $state(false);
 	let callbackRequestUrl = $state<string>();
 	let callbackHttp = $state<HttpInspection>();

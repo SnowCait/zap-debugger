@@ -32,7 +32,7 @@ export function interpretZapCallbackResponse(http: HttpInspection): ZapCallbackR
 	if (typeof value !== 'object' || value === null) {
 		return { kind: 'missing', reason: 'The JSON response is not an object with a string pr.' };
 	}
-	const record: Record<string, unknown> = value;
+	const record = value as Record<string, unknown>;
 	if (record.status === 'ERROR') {
 		return {
 			kind: 'error',
