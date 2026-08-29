@@ -39,9 +39,11 @@ const bytes = (hex: string) =>
 	Uint8Array.from(hex.match(/../g) ?? [], (part) => parseInt(part, 16));
 const record = (value: unknown): value is Record<string, unknown> =>
 	typeof value === 'object' && value !== null && !Array.isArray(value);
-const validTags = (value: unknown): value is string[][] =>
+const serializableTags = (value: unknown): value is string[][] =>
 	Array.isArray(value) &&
 	value.every((tag) => Array.isArray(tag) && tag.every((item) => typeof item === 'string'));
+const validTags = (value: unknown): value is string[][] =>
+	serializableTags(value) && value.every((tag) => tag.length > 0);
 const values = (tags: string[][], name: string) =>
 	tags.flatMap((tag) => (tag[0] === name && typeof tag[1] === 'string' ? [tag[1]] : []));
 const required = (id: string, label: string, pass: boolean, detail?: string): ReceiptCheck => ({
@@ -105,7 +107,7 @@ export async function validateZapReceipt(
 		Number.isInteger(event.created_at) &&
 		typeof event.kind === 'number' &&
 		Number.isInteger(event.kind) &&
-		validTags(event.tags) &&
+		serializableTags(event.tags) &&
 		typeof event.content === 'string'
 	)
 		calculatedEventId = await calculateNostrEventId(event as never);
@@ -228,7 +230,7 @@ export async function validateZapReceipt(
 	const author = required(
 		'author',
 		'Receipt author matches LNURL provider nostrPubkey',
-		event.pubkey === input.providerNostrPubkey
+		event.pubkey === input.providerNostrPubkey.toLowerCase()
 	);
 	const amounts = values(requestTags, 'amount');
 	let amountCheck: ReceiptCheck;

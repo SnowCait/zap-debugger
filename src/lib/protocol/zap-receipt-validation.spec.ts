@@ -120,6 +120,23 @@ describe('NIP-01 Zap Receipt integrity', () => {
 		const invalid = await validate({ candidate: { ...base.receipt, sig: '0'.repeat(128) } });
 		expect(check(invalid, 'signature').status).toBe('fail');
 	});
+
+	it('rejects an empty tag even when the canonical ID and signature are valid', async () => {
+		const base = await fixture();
+		const candidate = await signedReceipt([[], ...base.receipt.tags]);
+		const result = await validate({ candidate });
+		expect(check(result, 'shape').status).toBe('fail');
+		expect(check(result, 'event-id').status).toBe('pass');
+		expect(check(result, 'signature').status).toBe('pass');
+		expect(result.valid).toBe(false);
+	});
+
+	it('continues to require a lowercase candidate pubkey', async () => {
+		const base = await fixture();
+		const result = await validate({ candidate: { ...base.receipt, pubkey: pubkey.toUpperCase() } });
+		expect(check(result, 'shape').status).toBe('fail');
+		expect(result.valid).toBe(false);
+	});
 });
 
 describe('NIP-57 Appendix E and F checks', () => {
@@ -184,6 +201,10 @@ describe('NIP-57 Appendix E and F checks', () => {
 	});
 
 	it('validates provider author and decodes amount from the receipt invoice', async () => {
+		expect(check(await validate(), 'author').status).toBe('pass');
+		const uppercaseProvider = await validate({ providerNostrPubkey: pubkey.toUpperCase() });
+		expect(check(uppercaseProvider, 'author').status).toBe('pass');
+		expect(uppercaseProvider.valid).toBe(true);
 		expect(check(await validate({ providerNostrPubkey: recipient }), 'author').status).toBe('fail');
 		const base = await fixture();
 		expect(check(await validate({ signedZapRequest: request('2000') }), 'amount').status).toBe(
