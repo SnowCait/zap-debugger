@@ -156,7 +156,11 @@ describe('Zap debugger protocol boundaries', () => {
 		expect(socket.url).toBe('wss://relay.example');
 		socket.open();
 		const request = JSON.parse(socket.sent[0] ?? 'null');
-		expect(request[2]).toEqual({ kinds: [9735], '#p': [pubkey] });
+		expect(request[2]).toEqual({
+			kinds: [9735],
+			'#p': [pubkey],
+			since: signEvent.mock.calls[0]?.[0].created_at
+		});
 		expect(request[2]).not.toHaveProperty('#bolt11');
 		socket.message(['EVENT', request[1], { id: 'other', kind: 9735, tags: [['bolt11', 'other']] }]);
 		await expect

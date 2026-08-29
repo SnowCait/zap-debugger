@@ -37,8 +37,12 @@ type StateListener = (state: ZapReceiptSubscriptionState) => void;
 
 const OPEN = 1;
 
-export function buildZapReceiptReq(subscriptionId: string, recipientPubkey: string): string {
-	return JSON.stringify(['REQ', subscriptionId, { kinds: [9735], '#p': [recipientPubkey] }]);
+export function buildZapReceiptReq(
+	subscriptionId: string,
+	recipientPubkey: string,
+	since: number
+): string {
+	return JSON.stringify(['REQ', subscriptionId, { kinds: [9735], '#p': [recipientPubkey], since }]);
 }
 
 export function isZapReceiptCandidate(
@@ -66,9 +70,11 @@ export class ZapReceiptSubscriptionController {
 		relays: string[];
 		recipientPubkey: string;
 		invoice: string;
+		createdAt: number;
 		onState: StateListener;
 	}): void {
 		this.stop();
+		const relays = [...new Set(input.relays)];
 		const generation = ++this.generation;
 		const subscriptionId = `zap-${generation}-${Math.random().toString(36).slice(2, 8)}`;
 		this.listener = input.onState;
@@ -76,12 +82,12 @@ export class ZapReceiptSubscriptionController {
 		this.state = {
 			waiting: true,
 			subscriptionId,
-			relays: input.relays.map((relay) => ({ relay, state: 'connecting', eose: false })),
+			relays: relays.map((relay) => ({ relay, state: 'connecting', eose: false })),
 			candidates: []
 		};
 		this.emit();
 
-		for (const relay of input.relays) {
+		for (const relay of relays) {
 			let socket: WebSocketTransport;
 			try {
 				socket = this.createSocket(relay);
@@ -96,7 +102,7 @@ export class ZapReceiptSubscriptionController {
 			socket.onopen = () => {
 				if (!this.isCurrent(generation)) return;
 				try {
-					socket.send(buildZapReceiptReq(subscriptionId, input.recipientPubkey));
+					socket.send(buildZapReceiptReq(subscriptionId, input.recipientPubkey, input.createdAt));
 					this.updateRelay(generation, relay, { state: 'subscribed' });
 				} catch (error) {
 					this.updateRelay(generation, relay, {

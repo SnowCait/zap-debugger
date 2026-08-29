@@ -353,16 +353,28 @@
 			: [];
 	};
 	const receiptRecipient = () => getSignedTagValues('p')[0];
+	const receiptCreatedAt = () => {
+		if (typeof signedRaw !== 'object' || signedRaw === null) return undefined;
+		const createdAt = (signedRaw as { created_at?: unknown }).created_at;
+		return typeof createdAt === 'number' &&
+			Number.isFinite(createdAt) &&
+			Number.isInteger(createdAt) &&
+			createdAt >= 0
+			? createdAt
+			: undefined;
+	};
 	function startReceiptSubscription() {
 		if (!receiptReady()) return;
 		const invoice = callbackResult?.kind === 'invoice' ? callbackResult.pr : undefined;
 		const recipientPubkey = receiptRecipient();
 		const relays = receiptRelays();
-		if (!invoice || !recipientPubkey || relays.length === 0) return;
+		const createdAt = receiptCreatedAt();
+		if (!invoice || !recipientPubkey || relays.length === 0 || createdAt === undefined) return;
 		receiptController.start({
 			relays,
 			recipientPubkey,
 			invoice,
+			createdAt,
 			onState: (state) => (receiptState = state)
 		});
 	}
@@ -397,7 +409,8 @@
 		paymentReady() &&
 		signedRaw !== undefined &&
 		receiptRelays().length > 0 &&
-		receiptRecipient() !== undefined;
+		receiptRecipient() !== undefined &&
+		receiptCreatedAt() !== undefined;
 </script>
 
 <svelte:head
@@ -951,6 +964,8 @@
 						<dd class="break">{receiptRecipient()}</dd>
 						<dt>Current invoice</dt>
 						<dd class="break">{callbackResult.pr}</dd>
+						<dt>Since (signed Zap Request created_at)</dt>
+						<dd>{receiptCreatedAt()}</dd>
 						<dt>Relays from signed Zap Request</dt>
 						<dd><pre>{formattedJson(receiptRelays())}</pre></dd>
 					</dl>

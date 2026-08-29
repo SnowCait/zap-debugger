@@ -31,6 +31,7 @@ class FakeSocket implements WebSocketTransport {
 
 const invoice = 'lnbc-current';
 const pubkey = 'ab'.repeat(32);
+const createdAt = 1_720_000_000;
 const receipt = (id: string, invoiceValue = invoice) => ({
 	id,
 	kind: 9735,
@@ -38,23 +39,49 @@ const receipt = (id: string, invoiceValue = invoice) => ({
 	content: ''
 });
 
-function setup(relays = ['wss://relay-a.example']) {
+function setup(relays = ['wss://relay-a.example'], zapRequestCreatedAt = createdAt) {
 	const sockets = new Map<string, FakeSocket>();
-	let state: ZapReceiptSubscriptionState | undefined;
-	const controller = new ZapReceiptSubscriptionController((relay) => {
+	const createSocket = vi.fn((relay: string) => {
 		const socket = new FakeSocket();
 		sockets.set(relay, socket);
 		return socket;
 	});
-	controller.start({ relays, recipientPubkey: pubkey, invoice, onState: (next) => (state = next) });
-	return { controller, sockets, state: () => state as ZapReceiptSubscriptionState };
+	let state: ZapReceiptSubscriptionState | undefined;
+	const controller = new ZapReceiptSubscriptionController(createSocket);
+	controller.start({
+		relays,
+		recipientPubkey: pubkey,
+		invoice,
+		createdAt: zapRequestCreatedAt,
+		onState: (next) => (state = next)
+	});
+	return { controller, createSocket, sockets, state: () => state as ZapReceiptSubscriptionState };
 }
 
 describe('Zap Receipt subscription protocol', () => {
 	it('constructs a kind 9735 and #p REQ without a #bolt11 filter', () => {
-		const parsed = JSON.parse(buildZapReceiptReq('sub-1', pubkey));
-		expect(parsed).toEqual(['REQ', 'sub-1', { kinds: [9735], '#p': [pubkey] }]);
+		const parsed = JSON.parse(buildZapReceiptReq('sub-1', pubkey, createdAt));
+		expect(parsed).toEqual(['REQ', 'sub-1', { kinds: [9735], '#p': [pubkey], since: createdAt }]);
 		expect(parsed[2]).not.toHaveProperty('#bolt11');
+	});
+
+	it('uses the provided Zap Request created_at for each REQ', () => {
+		const first = JSON.parse(buildZapReceiptReq('first', pubkey, 100));
+		const second = JSON.parse(buildZapReceiptReq('second', pubkey, 200));
+		expect(first[2].since).toBe(100);
+		expect(second[2].since).toBe(200);
+	});
+
+	it('deduplicates exact relay URLs before creating connections and state', () => {
+		const relay = 'wss://relay.example';
+		const { controller, createSocket, sockets, state } = setup([relay, relay]);
+		expect(createSocket).toHaveBeenCalledOnce();
+		expect(state().relays).toEqual([{ relay, state: 'connecting', eose: false }]);
+		const socket = sockets.get(relay) as FakeSocket;
+		socket.open();
+		expect(socket.sent).toHaveLength(1);
+		controller.stop();
+		expect(socket.close).toHaveBeenCalledOnce();
 	});
 
 	it('matches any exact bolt11 tag while retaining the raw event', () => {
@@ -122,6 +149,7 @@ describe('Zap Receipt subscription protocol', () => {
 			relays: ['wss://relay-b.example'],
 			recipientPubkey: pubkey,
 			invoice,
+			createdAt,
 			onState: (next) => (current = next)
 		});
 		staleMessage?.({ data: JSON.stringify(['EVENT', firstSub, receipt('stale')]) } as MessageEvent);
