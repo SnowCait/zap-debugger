@@ -39,6 +39,11 @@
 		ZapReceiptSubscriptionController,
 		type ZapReceiptSubscriptionState
 	} from '$lib/protocol/zap-receipt-subscription';
+	import {
+		validateZapReceipt,
+		type ReceiptCheck,
+		type ReceiptValidationResult
+	} from '$lib/protocol/zap-receipt-validation';
 
 	let input = $state('');
 	let addressResult = $state<AddressParseResult>();
@@ -79,6 +84,8 @@
 		relays: [],
 		candidates: []
 	});
+	let receiptValidations = $state<Record<string, ReceiptValidationResult | 'loading'>>({});
+	let receiptValidationGeneration = 0;
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
 	const callbackController = new ZapCallbackFetchController();
@@ -115,6 +122,11 @@
 	function resetReceiptSubscription() {
 		receiptController.stop();
 		receiptState = { waiting: false, relays: [], candidates: [] };
+		resetReceiptValidations();
+	}
+	function resetReceiptValidations() {
+		receiptValidationGeneration += 1;
+		receiptValidations = {};
 	}
 	function resetSigned() {
 		signingController.invalidate();
@@ -372,6 +384,7 @@
 		const relays = receiptRelays();
 		const createdAt = receiptCreatedAt();
 		if (!invoice || !recipientPubkey || relays.length === 0 || createdAt === undefined) return;
+		resetReceiptValidations();
 		receiptController.start({
 			relays,
 			recipientPubkey,
@@ -380,6 +393,47 @@
 			onState: (state) => (receiptState = state)
 		});
 	}
+	async function validateCandidate(candidateKey: string, candidate: unknown) {
+		if (
+			callbackResult?.kind !== 'invoice' ||
+			callbackZapRequestJson === undefined ||
+			signedRaw === undefined ||
+			encodedLnurl === undefined ||
+			lud06?.kind !== 'payRequest' ||
+			typeof lud06.data.nostrPubkey !== 'string'
+		)
+			return;
+		const generation = receiptValidationGeneration;
+		receiptValidations = { ...receiptValidations, [candidateKey]: 'loading' };
+		const result = await validateZapReceipt({
+			candidate,
+			signedZapRequest: signedRaw,
+			exactZapRequestJson: callbackZapRequestJson,
+			currentInvoice: callbackResult.pr,
+			providerNostrPubkey: lud06.data.nostrPubkey,
+			currentLnurl: encodedLnurl
+		});
+		if (
+			generation !== receiptValidationGeneration ||
+			!receiptState.candidates.some((item) => item.key === candidateKey)
+		)
+			return;
+		receiptValidations = { ...receiptValidations, [candidateKey]: result };
+	}
+	const checkMark = (check: ReceiptCheck) => {
+		if (check.status === 'pass') return '✓';
+		if (check.status === 'fail') return '✕';
+		if (check.status === 'warning') return '⚠';
+		return '—';
+	};
+	const checkClass = (check: ReceiptCheck) =>
+		check.status === 'fail'
+			? 'errors'
+			: check.status === 'warning'
+				? 'warning'
+				: check.status === 'pass'
+					? 'success'
+					: 'muted';
 	function stopReceiptSubscription() {
 		resetReceiptSubscription();
 	}
@@ -413,6 +467,11 @@
 		receiptRelays().length > 0 &&
 		receiptRecipient() !== undefined &&
 		receiptCreatedAt() !== undefined;
+	const receiptValidationReady = () =>
+		receiptState.candidates.length > 0 &&
+		callbackZapRequestJson !== undefined &&
+		typeof (lud06?.kind === 'payRequest' ? lud06.data.nostrPubkey : undefined) === 'string' &&
+		encodedLnurl !== undefined;
 </script>
 
 <svelte:head
@@ -1029,6 +1088,79 @@
 			<p class="muted">
 				Step 11 requires the verified payment handoff, signed Zap Request, recipient p tag, and at
 				least one relay from its relays tag.
+			</p>
+		{/if}
+	</section>
+	<section>
+		<h2><span>12</span> Validate Zap Receipt</h2>
+		{#if receiptValidationReady()}
+			<p class="notice">
+				Validation starts only when requested. Candidate IDs are not trusted: each event ID and
+				signature are independently verified.
+			</p>
+			{#each receiptState.candidates as candidate, index (candidate.key)}
+				{@const validation = receiptValidations[candidate.key]}
+				<div class="result">
+					<h3>Candidate Zap Receipt {index + 1}</h3>
+					<button
+						onclick={() => validateCandidate(candidate.key, candidate.event)}
+						disabled={validation === 'loading'}
+					>
+						{validation === 'loading' ? 'Validating…' : 'Validate Zap Receipt'}
+					</button>
+					{#if validation && validation !== 'loading'}
+						<dl>
+							<dt>Claimed event ID</dt>
+							<dd class="break">{validation.claimedEventId ?? '(missing or malformed)'}</dd>
+							<dt>Calculated event ID</dt>
+							<dd class="break">{validation.calculatedEventId ?? '(not calculable)'}</dd>
+							<dt>Event ID comparison</dt>
+							<dd>
+								{validation.claimedEventId === validation.calculatedEventId ? 'Match' : 'Mismatch'}
+							</dd>
+						</dl>
+						{#each validation.sections as validationSection (validationSection.title)}
+							<h3>{validationSection.title}</h3>
+							<ul class="validation-checks">
+								{#each validationSection.checks as check (check.id)}
+									<li class={checkClass(check)}>
+										<strong>{checkMark(check)} {check.label}</strong>
+										<small
+											>{check.level.toUpperCase()} · {check.status}{check.detail
+												? ` · ${check.detail}`
+												: ''}</small
+										>
+									</li>
+								{/each}
+							</ul>
+						{/each}
+						<h3>Description exact-string comparison</h3>
+						<dl>
+							<dt>Receipt description</dt>
+							<dd class="break">{validation.receiptDescription ?? '(missing)'}</dd>
+							<dt>Exact Zap Request JSON sent to callback</dt>
+							<dd class="break">{validation.expectedDescription}</dd>
+							<dt>Exact comparison</dt>
+							<dd>
+								{validation.receiptDescription === validation.expectedDescription
+									? 'Match'
+									: 'Mismatch'}
+							</dd>
+						</dl>
+						<h3>Overall</h3>
+						<p class={validation.valid ? 'success' : 'errors'}>
+							<strong>{validation.valid ? '✓ Valid Zap Receipt' : '✕ Invalid Zap Receipt'}</strong>
+						</p>
+						<p class={validation.warningCount > 0 ? 'warning' : 'muted'}>
+							Warnings: {validation.warningCount}
+						</p>
+					{/if}
+				</div>
+			{/each}
+		{:else}
+			<p class="muted">
+				Step 12 requires at least one Step 11 candidate and the validated LNURL provider
+				nostrPubkey.
 			</p>
 		{/if}
 	</section>

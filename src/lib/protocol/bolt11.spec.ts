@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	inspectBolt11Amount,
 	inspectBolt11DescriptionHash,
+	inspectBolt11PaymentHash,
 	parseBolt11Amount,
 	sha256Utf8Hex,
 	verifyBolt11DescriptionHash
@@ -104,6 +105,28 @@ describe('BOLT11 amount inspection', () => {
 			prefix,
 			network,
 			amountMsat: 1_000n
+		});
+	});
+});
+
+describe('BOLT11 payment hash inspection', () => {
+	it('extracts the 32-byte p field', () => {
+		const bytes = Uint8Array.from({ length: 32 }, (_, index) => 31 - index);
+		expect(inspectBolt11PaymentHash(invoiceWithFields([field(1, bech32.toWords(bytes))]))).toEqual({
+			status: 'available',
+			paymentHashHex: Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+		});
+	});
+
+	it('distinguishes missing, duplicate, and malformed p fields', () => {
+		const hash = bech32.toWords(new Uint8Array(32));
+		expect(inspectBolt11PaymentHash(invoiceWithFields([]))).toMatchObject({ status: 'missing' });
+		expect(
+			inspectBolt11PaymentHash(invoiceWithFields([field(1, hash), field(1, hash)]))
+		).toMatchObject({ status: 'failure', reason: 'Invoice contains multiple payment hashes' });
+		expect(inspectBolt11PaymentHash(invoiceWithFields([field(1, hash.slice(1))]))).toMatchObject({
+			status: 'failure',
+			reason: 'Invoice payment hash has an invalid length'
 		});
 	});
 });

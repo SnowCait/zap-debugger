@@ -16,13 +16,72 @@ export type DescriptionHashVerificationResult =
 	| { status: 'failure'; reason: string; calculatedHashHex?: string }
 	| { status: 'match' | 'mismatch'; invoiceHashHex: string; calculatedHashHex: string };
 
+export type Bolt11PaymentHashResult =
+	| { status: 'failure'; reason: string }
+	| { status: 'missing'; reason: string }
+	| { status: 'available'; paymentHashHex: string };
+
 // The BOLT11 data part is expressed as 5-bit words.
 const TIMESTAMP_WORDS = 7; // 35 bits
 const SIGNATURE_WORDS = 104; // 520 bits
 const TAG_HEADER_WORDS = 3; // type (5 bits) + length (10 bits)
 const DESCRIPTION_HASH_TYPE = 23;
 const DESCRIPTION_TYPE = 13;
+const PAYMENT_HASH_TYPE = 1;
 const DESCRIPTION_HASH_WORDS = 52; // padded representation of 256 bits
+
+type TaggedFieldScan = { fields: Map<number, number[][]> } | { failure: string };
+
+function scanTaggedFields(invoice: string): TaggedFieldScan {
+	try {
+		const { words } = bech32.decode(invoice, false);
+		if (words.length < TIMESTAMP_WORDS + SIGNATURE_WORDS)
+			return { failure: 'BOLT11 data part is too short' };
+		const end = words.length - SIGNATURE_WORDS;
+		const fields = new Map<number, number[][]>();
+		let offset = TIMESTAMP_WORDS;
+		while (offset < end) {
+			if (offset + TAG_HEADER_WORDS > end)
+				return { failure: 'Malformed BOLT11 tagged field header' };
+			const type = words[offset];
+			const length = words[offset + 1] * 32 + words[offset + 2];
+			offset += TAG_HEADER_WORDS;
+			if (offset + length > end)
+				return { failure: 'BOLT11 tagged field exceeds the data boundary' };
+			const values = fields.get(type) ?? [];
+			values.push(words.slice(offset, offset + length));
+			fields.set(type, values);
+			offset += length;
+		}
+		return { fields };
+	} catch (error) {
+		return {
+			failure: error instanceof Error ? error.message : 'BOLT11 tagged field decoding failed'
+		};
+	}
+}
+
+function decodeSingleHashField(
+	scan: TaggedFieldScan,
+	type: number,
+	name: string,
+	pluralName = `${name}s`
+): Bolt11PaymentHashResult {
+	if ('failure' in scan) return { status: 'failure', reason: scan.failure };
+	const values = scan.fields.get(type) ?? [];
+	if (values.length === 0)
+		return { status: 'missing', reason: `Invoice does not contain a ${name}` };
+	if (values.length > 1)
+		return { status: 'failure', reason: `Invoice contains multiple ${pluralName}` };
+	if (values[0].length !== DESCRIPTION_HASH_WORDS)
+		return { status: 'failure', reason: `Invoice ${name} has an invalid length` };
+	const bytes = bech32.fromWords(values[0]);
+	if (bytes.length !== 32) return { status: 'failure', reason: `Invoice ${name} is not 256 bits` };
+	return { status: 'available', paymentHashHex: bytesToHex(bytes) };
+}
+
+const bytesToHex = (bytes: Uint8Array) =>
+	Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
 
 const NETWORKS: Record<string, Bolt11Network> = {
 	lnbc: 'bitcoin',
@@ -76,30 +135,10 @@ export function inspectBolt11Amount(invoice: string): Bolt11AmountResult {
 
 export function inspectBolt11DescriptionHash(invoice: string): Bolt11DescriptionHashResult {
 	try {
-		const { words } = bech32.decode(invoice, false);
-		if (words.length < TIMESTAMP_WORDS + SIGNATURE_WORDS) {
-			return { status: 'failure', reason: 'BOLT11 data part is too short' };
-		}
-
-		const taggedFieldsEnd = words.length - SIGNATURE_WORDS;
-		let offset = TIMESTAMP_WORDS;
-		const hashes: number[][] = [];
-		let hasDirectDescription = false;
-		while (offset < taggedFieldsEnd) {
-			if (offset + TAG_HEADER_WORDS > taggedFieldsEnd) {
-				return { status: 'failure', reason: 'Malformed BOLT11 tagged field header' };
-			}
-			const type = words[offset];
-			const length = words[offset + 1] * 32 + words[offset + 2];
-			offset += TAG_HEADER_WORDS;
-			if (offset + length > taggedFieldsEnd) {
-				return { status: 'failure', reason: 'BOLT11 tagged field exceeds the data boundary' };
-			}
-			const data = words.slice(offset, offset + length);
-			if (type === DESCRIPTION_HASH_TYPE) hashes.push(data);
-			if (type === DESCRIPTION_TYPE) hasDirectDescription = true;
-			offset += length;
-		}
+		const scan = scanTaggedFields(invoice);
+		if ('failure' in scan) return { status: 'failure', reason: scan.failure };
+		const hashes = scan.fields.get(DESCRIPTION_HASH_TYPE) ?? [];
+		const hasDirectDescription = (scan.fields.get(DESCRIPTION_TYPE)?.length ?? 0) > 0;
 
 		if (hasDirectDescription && hashes.length > 0) {
 			return {
@@ -135,6 +174,17 @@ export function inspectBolt11DescriptionHash(invoice: string): Bolt11Description
 			reason: error instanceof Error ? error.message : 'BOLT11 description hash decoding failed'
 		};
 	}
+}
+
+export function inspectBolt11PaymentHash(invoice: string): Bolt11PaymentHashResult {
+	const result = decodeSingleHashField(
+		scanTaggedFields(invoice),
+		PAYMENT_HASH_TYPE,
+		'payment hash',
+		'payment hashes'
+	);
+	if (result.status !== 'available') return result;
+	return { status: 'available', paymentHashHex: result.paymentHashHex };
 }
 
 export async function sha256Utf8Hex(value: string): Promise<string> {
