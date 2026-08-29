@@ -4,6 +4,8 @@ import { render } from 'vitest-browser-svelte';
 import ZapDebugger from './+page.svelte';
 
 const pubkey = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798';
+const invoice =
+	'lnbc10n1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgp5nzkrw';
 
 afterEach(() => {
 	delete window.nostr;
@@ -27,7 +29,7 @@ describe('Zap debugger protocol boundaries', () => {
 				new Response(JSON.stringify(payResponse), { status: 200, statusText: 'OK' })
 			)
 			.mockResolvedValueOnce(
-				new Response(JSON.stringify({ pr: 'lnbc1testinvoice', routes: [] }), {
+				new Response(JSON.stringify({ pr: invoice, routes: [] }), {
 					status: 200,
 					statusText: 'OK'
 				})
@@ -78,6 +80,11 @@ describe('Zap debugger protocol boundaries', () => {
 			id: '0'.repeat(64),
 			sig: '0'.repeat(128)
 		});
-		await expect.element(page.getByText('lnbc1testinvoice')).toBeInTheDocument();
+		await expect.element(page.getByText(invoice)).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Decode invoice' }).click();
+		await expect.element(page.getByText('1000', { exact: true }).last()).toBeInTheDocument();
+		await expect
+			.element(page.getByText('✓ Invoice amount matches requested amount'))
+			.toBeInTheDocument();
 	});
 });

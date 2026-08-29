@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { inspectBolt11Amount, type Bolt11AmountResult } from '$lib/protocol/bolt11';
 	import type { HttpInspection } from '$lib/protocol/http';
 	import { LnurlPayFetchController } from '$lib/protocol/lnurl-pay-fetch';
 	import { encodeLnurl } from '$lib/protocol/lnurl-bech32';
@@ -53,6 +54,7 @@
 	let callbackRequestUrl = $state<string>();
 	let callbackHttp = $state<HttpInspection>();
 	let callbackResult = $state<ZapCallbackResult>();
+	let invoiceAmountResult = $state<Bolt11AmountResult>();
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
 	const callbackController = new ZapCallbackFetchController();
@@ -72,6 +74,7 @@
 		callbackRequestUrl = undefined;
 		callbackHttp = undefined;
 		callbackResult = undefined;
+		invoiceAmountResult = undefined;
 	}
 	function resetSigned() {
 		signingController.invalidate();
@@ -243,6 +246,7 @@
 					callbackRequestUrl = requestUrl;
 					callbackHttp = undefined;
 					callbackResult = undefined;
+					invoiceAmountResult = undefined;
 				},
 				onSuccess: (result) => {
 					callbackRequestUrl = result.requestUrl;
@@ -254,6 +258,10 @@
 				}
 			}
 		);
+	}
+	function decodeInvoice() {
+		if (callbackResult?.kind !== 'invoice') return;
+		invoiceAmountResult = inspectBolt11Amount(callbackResult.pr);
 	}
 	const formattedJson = (value: unknown) => JSON.stringify(value, null, 2);
 	const zapReady = () =>
@@ -677,5 +685,53 @@
 				Sign the Zap Request in Step 6 first. The callback is only requested when you explicitly
 				continue.
 			</p>{/if}
+	</section>
+	<section>
+		<h2><span>8</span> Inspect BOLT11 invoice amount</h2>
+		{#if callbackResult?.kind === 'invoice' && amountResult?.amount !== undefined}
+			<div class="grid">
+				<div>
+					<h3>Input</h3>
+					<dl>
+						<dt>Lightning invoice (pr)</dt>
+						<dd class="break">{callbackResult.pr}</dd>
+						<dt>Requested amount (msat)</dt>
+						<dd>{amountResult.amount}</dd>
+					</dl>
+					<button onclick={decodeInvoice}>Decode invoice</button>
+				</div>
+				<div>
+					<h3>Decode result</h3>
+					{#if invoiceAmountResult?.status === 'failure'}
+						<p class="errors" role="alert">
+							✕ BOLT11 amount decode failed: {invoiceAmountResult.reason}
+						</p>
+					{:else if invoiceAmountResult}
+						<dl>
+							<dt>Network / prefix</dt>
+							<dd>{invoiceAmountResult.network} / {invoiceAmountResult.prefix}</dd>
+							<dt>Invoice amount (msat)</dt>
+							<dd>
+								{invoiceAmountResult.status === 'specified'
+									? invoiceAmountResult.amountMsat.toString()
+									: '(unspecified)'}
+							</dd>
+							<dt>Requested amount (msat)</dt>
+							<dd>{amountResult.amount}</dd>
+							<dt>Amount comparison</dt>
+							<dd>
+								{#if invoiceAmountResult.status === 'unspecified'}
+									<span class="errors">✕ Invoice amount is unspecified</span>
+								{:else if invoiceAmountResult.amountMsat === BigInt(amountResult.amount)}
+									<span class="success">✓ Invoice amount matches requested amount</span>
+								{:else}
+									<span class="errors">✕ Invoice amount does not match requested amount</span>
+								{/if}
+							</dd>
+						</dl>
+					{:else}<p class="muted">Not run</p>{/if}
+				</div>
+			</div>
+		{:else}<p class="muted">Get a Lightning invoice from the callback in Step 7 first.</p>{/if}
 	</section>
 </main>
