@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import InvoiceQr from '$lib/InvoiceQr.svelte';
 	import {
 		inspectBolt11Amount,
@@ -33,6 +33,12 @@
 	import { ZapCallbackFetchController } from '$lib/protocol/zap-callback-fetch';
 	import type { ValidationItem } from '$lib/protocol/validation';
 	import { createPaymentHandoffValues, isPaymentHandoffReady } from '$lib/protocol/payment-handoff';
+	import {
+		calculateZapReceiptSince,
+		RECEIPT_CLOCK_SKEW_MARGIN_SECONDS,
+		ZapReceiptSubscriptionController,
+		type ZapReceiptSubscriptionState
+	} from '$lib/protocol/zap-receipt-subscription';
 
 	let input = $state('');
 	let addressResult = $state<AddressParseResult>();
@@ -68,13 +74,20 @@
 	let descriptionHashGeneration = 0;
 	let copyStatus = $state<'copied' | 'failed'>();
 	let copyGeneration = 0;
+	let receiptState = $state<ZapReceiptSubscriptionState>({
+		waiting: false,
+		relays: [],
+		candidates: []
+	});
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
 	const callbackController = new ZapCallbackFetchController();
+	const receiptController = new ZapReceiptSubscriptionController();
 
 	onMount(() => {
 		refreshSignerAvailability();
 	});
+	onDestroy(() => receiptController.stop());
 	function refreshSignerAvailability() {
 		signerAvailable = getNip07Signer() !== undefined;
 		if (!signerAvailable) signError = 'NIP-07 signer is not available';
@@ -92,11 +105,16 @@
 		resetDescriptionHash();
 	}
 	function resetDescriptionHash() {
+		resetReceiptSubscription();
 		descriptionHashGeneration += 1;
 		descriptionHashLoading = false;
 		descriptionHashResult = undefined;
 		copyGeneration += 1;
 		copyStatus = undefined;
+	}
+	function resetReceiptSubscription() {
+		receiptController.stop();
+		receiptState = { waiting: false, relays: [], candidates: [] };
 	}
 	function resetSigned() {
 		signingController.invalidate();
@@ -319,6 +337,52 @@
 			if (generation === copyGeneration) copyStatus = 'failed';
 		}
 	}
+	function getSignedTagValues(name: string): string[] {
+		if (typeof signedRaw !== 'object' || signedRaw === null) return [];
+		const tags = (signedRaw as { tags?: unknown }).tags;
+		if (!Array.isArray(tags)) return [];
+		return tags.flatMap((tag) =>
+			Array.isArray(tag) && tag[0] === name && typeof tag[1] === 'string' ? [tag[1]] : []
+		);
+	}
+	const receiptRelays = () => {
+		if (typeof signedRaw !== 'object' || signedRaw === null) return [];
+		const tags = (signedRaw as { tags?: unknown }).tags;
+		if (!Array.isArray(tags)) return [];
+		const relaysTag = tags.find((tag) => Array.isArray(tag) && tag[0] === 'relays');
+		return Array.isArray(relaysTag)
+			? relaysTag.slice(1).filter((relay): relay is string => typeof relay === 'string')
+			: [];
+	};
+	const receiptRecipient = () => getSignedTagValues('p')[0];
+	const receiptCreatedAt = () => {
+		if (typeof signedRaw !== 'object' || signedRaw === null) return undefined;
+		const createdAt = (signedRaw as { created_at?: unknown }).created_at;
+		return typeof createdAt === 'number' &&
+			Number.isFinite(createdAt) &&
+			Number.isInteger(createdAt) &&
+			createdAt >= 0
+			? createdAt
+			: undefined;
+	};
+	function startReceiptSubscription() {
+		if (!receiptReady()) return;
+		const invoice = callbackResult?.kind === 'invoice' ? callbackResult.pr : undefined;
+		const recipientPubkey = receiptRecipient();
+		const relays = receiptRelays();
+		const createdAt = receiptCreatedAt();
+		if (!invoice || !recipientPubkey || relays.length === 0 || createdAt === undefined) return;
+		receiptController.start({
+			relays,
+			recipientPubkey,
+			invoice,
+			createdAt,
+			onState: (state) => (receiptState = state)
+		});
+	}
+	function stopReceiptSubscription() {
+		resetReceiptSubscription();
+	}
 	const formattedJson = (value: unknown) => JSON.stringify(value, null, 2);
 	const zapReady = () =>
 		lud06?.kind === 'payRequest' &&
@@ -343,6 +407,12 @@
 				invoiceAmountResult?.status === 'specified' ? invoiceAmountResult.amountMsat : undefined,
 			descriptionHashStatus: descriptionHashResult?.status
 		});
+	const receiptReady = () =>
+		paymentReady() &&
+		signedRaw !== undefined &&
+		receiptRelays().length > 0 &&
+		receiptRecipient() !== undefined &&
+		receiptCreatedAt() !== undefined;
 </script>
 
 <svelte:head
@@ -878,6 +948,87 @@
 		{:else}
 			<p class="muted">
 				Payment handoff is available only after the invoice amount and description hash both match.
+			</p>
+		{/if}
+	</section>
+	<section>
+		<h2><span>11</span> Wait for Zap Receipt</h2>
+		{#if receiptReady() && callbackResult?.kind === 'invoice'}
+			<p class="notice">
+				This step discovers unverified candidates. It does not validate Zap Receipt IDs, signatures,
+				authors, or tags.
+			</p>
+			<div class="grid">
+				<div>
+					<h3>Subscription input</h3>
+					<dl>
+						<dt>Recipient pubkey</dt>
+						<dd class="break">{receiptRecipient()}</dd>
+						<dt>Current invoice</dt>
+						<dd class="break">{callbackResult.pr}</dd>
+						<dt>Signed Zap Request created_at</dt>
+						<dd>{receiptCreatedAt()}</dd>
+						<dt>Clock-skew margin</dt>
+						<dd>{RECEIPT_CLOCK_SKEW_MARGIN_SECONDS} seconds</dd>
+						<dt>REQ since</dt>
+						<dd>{calculateZapReceiptSince(receiptCreatedAt() ?? 0)}</dd>
+						<dt>Relays from signed Zap Request</dt>
+						<dd><pre>{formattedJson(receiptRelays())}</pre></dd>
+					</dl>
+					{#if receiptState.waiting}
+						<button onclick={stopReceiptSubscription}>Stop waiting</button>
+					{:else}
+						<button onclick={startReceiptSubscription}>Wait for Zap Receipt</button>
+					{/if}
+				</div>
+				<div>
+					<h3>Relay status</h3>
+					{#if receiptState.relays.length === 0}
+						<p class="muted">Not started</p>
+					{:else}
+						{#each receiptState.relays as relay (relay.relay)}
+							<div class="result">
+								<strong class="break">{relay.relay}</strong>
+								<p>
+									{relay.state === 'subscribed' ? 'Connected · Subscribed' : relay.state}
+									{relay.eose ? ' · EOSE' : ''}
+								</p>
+								{#if relay.notice}<p>NOTICE: {relay.notice}</p>{/if}
+								{#if relay.closedMessage}<p>CLOSED: {relay.closedMessage}</p>{/if}
+								{#if relay.error}<p class="errors">{relay.error}</p>{/if}
+							</div>
+						{/each}
+					{/if}
+				</div>
+			</div>
+			<div class="output">
+				<h3>Candidate Zap Receipts</h3>
+				{#if receiptState.candidates.length === 0}
+					<p class="muted">No candidate Zap Receipt received yet</p>
+				{:else}
+					{#each receiptState.candidates as candidate, index (candidate.key)}
+						<div class="result">
+							<h3>Candidate Zap Receipt {index + 1}</h3>
+							<dl>
+								<dt>Event ID</dt>
+								<dd class="break">
+									{typeof candidate.event.id === 'string'
+										? candidate.event.id
+										: '(missing or malformed)'}
+								</dd>
+								<dt>Received from</dt>
+								<dd><pre>{candidate.sourceRelays.join('\n')}</pre></dd>
+							</dl>
+							<h3>Raw event</h3>
+							<pre>{formattedJson(candidate.event)}</pre>
+						</div>
+					{/each}
+				{/if}
+			</div>
+		{:else}
+			<p class="muted">
+				Step 11 requires the verified payment handoff, signed Zap Request, recipient p tag, and at
+				least one relay from its relays tag.
 			</p>
 		{/if}
 	</section>
