@@ -101,6 +101,12 @@ export function inspectBolt11DescriptionHash(invoice: string): Bolt11Description
 			offset += length;
 		}
 
+		if (hasDirectDescription && hashes.length > 0) {
+			return {
+				status: 'failure',
+				reason: 'Invoice contains both a direct description and a description hash'
+			};
+		}
 		if (hashes.length === 0) {
 			return {
 				status: 'missing',

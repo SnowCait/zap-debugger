@@ -146,6 +146,15 @@ describe('BOLT11 description hash inspection', () => {
 		});
 	});
 
+	it('rejects an invoice containing both d and h fields', () => {
+		const description = field(13, bech32.toWords(new TextEncoder().encode('direct')));
+		const hash = field(23, bech32.toWords(new Uint8Array(32)));
+		expect(inspectBolt11DescriptionHash(invoiceWithFields([description, hash]))).toEqual({
+			status: 'failure',
+			reason: 'Invoice contains both a direct description and a description hash'
+		});
+	});
+
 	it('rejects multiple and malformed h fields', () => {
 		const hash = bech32.toWords(new Uint8Array(32));
 		expect(
