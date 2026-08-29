@@ -159,9 +159,12 @@ describe('Zap debugger protocol boundaries', () => {
 		expect(request[2]).toEqual({
 			kinds: [9735],
 			'#p': [pubkey],
-			since: signEvent.mock.calls[0]?.[0].created_at
+			since: signEvent.mock.calls[0]?.[0].created_at - 60
 		});
 		expect(request[2]).not.toHaveProperty('#bolt11');
+		await expect
+			.element(page.getByText(String(request[2].since), { exact: true }))
+			.toBeInTheDocument();
 		socket.message(['EVENT', request[1], { id: 'other', kind: 9735, tags: [['bolt11', 'other']] }]);
 		await expect
 			.element(page.getByText('No candidate Zap Receipt received yet'))

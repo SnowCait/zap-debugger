@@ -36,12 +36,18 @@ type SocketFactory = (relay: string) => WebSocketTransport;
 type StateListener = (state: ZapReceiptSubscriptionState) => void;
 
 const OPEN = 1;
+export const RECEIPT_CLOCK_SKEW_MARGIN_SECONDS = 60;
+
+export function calculateZapReceiptSince(zapRequestCreatedAt: number): number {
+	return Math.max(0, zapRequestCreatedAt - RECEIPT_CLOCK_SKEW_MARGIN_SECONDS);
+}
 
 export function buildZapReceiptReq(
 	subscriptionId: string,
 	recipientPubkey: string,
-	since: number
+	zapRequestCreatedAt: number
 ): string {
+	const since = calculateZapReceiptSince(zapRequestCreatedAt);
 	return JSON.stringify(['REQ', subscriptionId, { kinds: [9735], '#p': [recipientPubkey], since }]);
 }
 

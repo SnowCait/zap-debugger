@@ -34,6 +34,8 @@
 	import type { ValidationItem } from '$lib/protocol/validation';
 	import { createPaymentHandoffValues, isPaymentHandoffReady } from '$lib/protocol/payment-handoff';
 	import {
+		calculateZapReceiptSince,
+		RECEIPT_CLOCK_SKEW_MARGIN_SECONDS,
 		ZapReceiptSubscriptionController,
 		type ZapReceiptSubscriptionState
 	} from '$lib/protocol/zap-receipt-subscription';
@@ -964,8 +966,12 @@
 						<dd class="break">{receiptRecipient()}</dd>
 						<dt>Current invoice</dt>
 						<dd class="break">{callbackResult.pr}</dd>
-						<dt>Since (signed Zap Request created_at)</dt>
+						<dt>Signed Zap Request created_at</dt>
 						<dd>{receiptCreatedAt()}</dd>
+						<dt>Clock-skew margin</dt>
+						<dd>{RECEIPT_CLOCK_SKEW_MARGIN_SECONDS} seconds</dd>
+						<dt>REQ since</dt>
+						<dd>{calculateZapReceiptSince(receiptCreatedAt() ?? 0)}</dd>
 						<dt>Relays from signed Zap Request</dt>
 						<dd><pre>{formattedJson(receiptRelays())}</pre></dd>
 					</dl>

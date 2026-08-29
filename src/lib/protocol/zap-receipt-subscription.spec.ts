@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
 	ZapReceiptSubscriptionController,
 	buildZapReceiptReq,
+	calculateZapReceiptSince,
 	isZapReceiptCandidate,
 	type WebSocketTransport,
 	type ZapReceiptSubscriptionState
@@ -61,15 +62,25 @@ function setup(relays = ['wss://relay-a.example'], zapRequestCreatedAt = created
 describe('Zap Receipt subscription protocol', () => {
 	it('constructs a kind 9735 and #p REQ without a #bolt11 filter', () => {
 		const parsed = JSON.parse(buildZapReceiptReq('sub-1', pubkey, createdAt));
-		expect(parsed).toEqual(['REQ', 'sub-1', { kinds: [9735], '#p': [pubkey], since: createdAt }]);
+		expect(parsed).toEqual([
+			'REQ',
+			'sub-1',
+			{ kinds: [9735], '#p': [pubkey], since: 1_719_999_940 }
+		]);
 		expect(parsed[2]).not.toHaveProperty('#bolt11');
 	});
 
 	it('uses the provided Zap Request created_at for each REQ', () => {
 		const first = JSON.parse(buildZapReceiptReq('first', pubkey, 100));
 		const second = JSON.parse(buildZapReceiptReq('second', pubkey, 200));
-		expect(first[2].since).toBe(100);
-		expect(second[2].since).toBe(200);
+		expect(first[2].since).toBe(40);
+		expect(second[2].since).toBe(140);
+	});
+
+	it('clamps the clock-skew-adjusted since timestamp to zero', () => {
+		expect(calculateZapReceiptSince(30)).toBe(0);
+		const parsed = JSON.parse(buildZapReceiptReq('sub-1', pubkey, 30));
+		expect(parsed[2].since).toBe(0);
 	});
 
 	it('deduplicates exact relay URLs before creating connections and state', () => {
