@@ -2,9 +2,15 @@ import { page } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { bech32 } from '@scure/base';
+import { schnorr } from '@noble/curves/secp256k1.js';
 import ZapDebugger from './+page.svelte';
+import { calculateNostrEventId } from '$lib/protocol/zap-receipt-validation';
 
 const pubkey = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798';
+const secretKey = Uint8Array.from({ length: 32 }, (_, index) => (index === 31 ? 1 : 0));
+const hex = (value: Uint8Array) =>
+	Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
+const raw = (value: string) => Uint8Array.from(value.match(/../g)!, (part) => parseInt(part, 16));
 
 class MockWebSocket {
 	static instances: MockWebSocket[] = [];
@@ -169,11 +175,44 @@ describe('Zap debugger protocol boundaries', () => {
 		await expect
 			.element(page.getByText('No candidate Zap Receipt received yet'))
 			.toBeInTheDocument();
-		const candidate = { id: 'candidate-id', kind: 9735, tags: [['bolt11', invoice]], content: '' };
+		const signedRequest = JSON.parse(sentJson);
+		const candidateBody = {
+			pubkey,
+			created_at: signedRequest.created_at + 1,
+			kind: 9735,
+			tags: [
+				['p', pubkey],
+				['bolt11', invoice],
+				['description', sentJson]
+			],
+			content: ''
+		};
+		const candidateId = await calculateNostrEventId(candidateBody);
+		const candidate = {
+			...candidateBody,
+			id: candidateId,
+			sig: hex(schnorr.sign(raw(candidateId), secretKey))
+		};
 		socket.message(['EVENT', request[1], candidate]);
 		await expect.element(page.getByText('Candidate Zap Receipt 1')).toBeInTheDocument();
-		await expect.element(page.getByText('candidate-id', { exact: true })).toBeInTheDocument();
+		await expect.element(page.getByText(candidateId, { exact: true }).first()).toBeInTheDocument();
 		await expect.element(page.getByText(JSON.stringify(candidate, null, 2))).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Validate Zap Receipt' }).click();
+		await expect.element(page.getByText('✓ Valid Zap Receipt')).toBeInTheDocument();
+		await expect
+			.element(page.getByText('BIP-340 Schnorr signature over calculated event ID'))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Receipt author matches LNURL provider nostrPubkey'))
+			.toBeInTheDocument();
+		await expect
+			.element(page.getByText('Amount in receipt bolt11 matches Zap Request amount'))
+			.toBeInTheDocument();
+		const invalid = { ...candidate, id: '0'.repeat(64), pubkey: '2'.repeat(64) };
+		socket.message(['EVENT', request[1], invalid]);
+		await expect.element(page.getByText('Candidate Zap Receipt 2')).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Validate Zap Receipt' }).last().click();
+		await expect.element(page.getByText('✕ Invalid Zap Receipt')).toBeInTheDocument();
 		await page.getByRole('button', { name: 'Stop waiting' }).click();
 		expect(socket.sent).toContain(JSON.stringify(['CLOSE', request[1]]));
 		expect(socket.close).toHaveBeenCalledOnce();

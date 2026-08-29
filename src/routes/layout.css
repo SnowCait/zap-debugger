@@ -229,6 +229,21 @@ pre {
 .success {
 	color: #6ee7b7;
 }
+.warning {
+	color: #fcd34d;
+}
+.validation-checks {
+	padding: 0;
+	list-style: none;
+}
+.validation-checks li {
+	margin: 0.5rem 0;
+}
+.validation-checks small {
+	display: block;
+	margin-left: 1.25rem;
+	color: #8393aa;
+}
 .muted {
 	color: #7f8da2;
 }
