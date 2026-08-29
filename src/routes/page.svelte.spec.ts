@@ -6,6 +6,30 @@ import ZapDebugger from './+page.svelte';
 
 const pubkey = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798';
 
+class MockWebSocket {
+	static instances: MockWebSocket[] = [];
+	readyState = 0;
+	onopen: ((event: Event) => void) | null = null;
+	onmessage: ((event: MessageEvent) => void) | null = null;
+	onerror: ((event: Event) => void) | null = null;
+	onclose: ((event: CloseEvent) => void) | null = null;
+	sent: string[] = [];
+	close = vi.fn();
+	constructor(public url: string) {
+		MockWebSocket.instances.push(this);
+	}
+	send(data: string) {
+		this.sent.push(data);
+	}
+	open() {
+		this.readyState = WebSocket.OPEN;
+		this.onopen?.(new Event('open'));
+	}
+	message(message: unknown) {
+		this.onmessage?.({ data: JSON.stringify(message) } as MessageEvent);
+	}
+}
+
 async function zapInvoice(description: string): Promise<{ invoice: string; hash: string }> {
 	const digest = new Uint8Array(
 		await crypto.subtle.digest('SHA-256', new TextEncoder().encode(description))
@@ -24,6 +48,8 @@ afterEach(() => {
 
 describe('Zap debugger protocol boundaries', () => {
 	it('passes raw endpoint, unsigned event, and signed event to structured-cloning controllers', async () => {
+		MockWebSocket.instances = [];
+		vi.stubGlobal('WebSocket', Object.assign(MockWebSocket, { OPEN: 1 }));
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(writeText);
 		const payResponse = {
@@ -120,5 +146,29 @@ describe('Zap debugger protocol boundaries', () => {
 		writeText.mockRejectedValueOnce(new Error('denied'));
 		await page.getByRole('button', { name: 'Copy invoice' }).click();
 		await expect.element(page.getByText('✕ Failed to copy invoice')).toBeInTheDocument();
+
+		await expect
+			.element(page.getByRole('heading', { name: '11 Wait for Zap Receipt' }))
+			.toBeInTheDocument();
+		await page.getByRole('button', { name: 'Wait for Zap Receipt' }).click();
+		expect(MockWebSocket.instances).toHaveLength(1);
+		const socket = MockWebSocket.instances[0] as MockWebSocket;
+		expect(socket.url).toBe('wss://relay.example');
+		socket.open();
+		const request = JSON.parse(socket.sent[0] ?? 'null');
+		expect(request[2]).toEqual({ kinds: [9735], '#p': [pubkey] });
+		expect(request[2]).not.toHaveProperty('#bolt11');
+		socket.message(['EVENT', request[1], { id: 'other', kind: 9735, tags: [['bolt11', 'other']] }]);
+		await expect
+			.element(page.getByText('No candidate Zap Receipt received yet'))
+			.toBeInTheDocument();
+		const candidate = { id: 'candidate-id', kind: 9735, tags: [['bolt11', invoice]], content: '' };
+		socket.message(['EVENT', request[1], candidate]);
+		await expect.element(page.getByText('Candidate Zap Receipt 1')).toBeInTheDocument();
+		await expect.element(page.getByText('candidate-id', { exact: true })).toBeInTheDocument();
+		await expect.element(page.getByText(JSON.stringify(candidate, null, 2))).toBeInTheDocument();
+		await page.getByRole('button', { name: 'Stop waiting' }).click();
+		expect(socket.sent).toContain(JSON.stringify(['CLOSE', request[1]]));
+		expect(socket.close).toHaveBeenCalledOnce();
 	});
 });
