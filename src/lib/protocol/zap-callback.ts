@@ -12,12 +12,22 @@ export type ZapCallbackResult =
 	| { kind: 'error'; reason: string }
 	| { kind: 'missing'; reason: string };
 
-export function buildZapCallbackUrl(input: ZapCallbackInput): string {
+export type ZapCallbackRequest = {
+	requestUrl: string;
+	zapRequestJson: string;
+};
+
+export function buildZapCallbackRequest(input: ZapCallbackInput): ZapCallbackRequest {
+	const zapRequestJson = JSON.stringify(input.signedZapRequest);
 	const url = new URL(input.callback);
 	url.searchParams.set('amount', input.amount);
-	url.searchParams.set('nostr', JSON.stringify(input.signedZapRequest));
+	url.searchParams.set('nostr', zapRequestJson);
 	url.searchParams.set('lnurl', input.encodedLnurl);
-	return url.toString();
+	return { requestUrl: url.toString(), zapRequestJson };
+}
+
+export function buildZapCallbackUrl(input: ZapCallbackInput): string {
+	return buildZapCallbackRequest(input).requestUrl;
 }
 
 export function interpretZapCallbackResponse(http: HttpInspection): ZapCallbackResult | undefined {

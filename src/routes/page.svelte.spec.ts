@@ -1,11 +1,21 @@
 import { page } from 'vitest/browser';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import { bech32 } from '@scure/base';
 import ZapDebugger from './+page.svelte';
 
 const pubkey = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798';
-const invoice =
-	'lnbc10n1pvjluezsp5zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zyg3zygspp5qqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqqqsyqcyq5rqwzqfqypqdq5xysxxatsyp3k7enxv4jsxqzpu9qrsgquk0rl77nj30yxdy8j9vdx85fkpmdla2087ne0xh8nhedh8w27kyke0lp53ut353s06fv3qfegext0eh0ymjpf39tuven09sam30g4vgp5nzkrw';
+
+async function zapInvoice(description: string): Promise<{ invoice: string; hash: string }> {
+	const digest = new Uint8Array(
+		await crypto.subtle.digest('SHA-256', new TextEncoder().encode(description))
+	);
+	const hash = Array.from(digest, (byte) => byte.toString(16).padStart(2, '0')).join('');
+	const hashWords = bech32.toWords(digest);
+	const h = [23, Math.floor(hashWords.length / 32), hashWords.length % 32, ...hashWords];
+	const words = [0, 0, 0, 0, 0, 0, 0, ...h, ...Array(104).fill(0)];
+	return { invoice: bech32.encode('lnbc10n', words, false), hash };
+}
 
 afterEach(() => {
 	delete window.nostr;
@@ -28,12 +38,14 @@ describe('Zap debugger protocol boundaries', () => {
 			.mockResolvedValueOnce(
 				new Response(JSON.stringify(payResponse), { status: 200, statusText: 'OK' })
 			)
-			.mockResolvedValueOnce(
-				new Response(JSON.stringify({ pr: invoice, routes: [] }), {
+			.mockImplementationOnce(async (requestUrl: string) => {
+				const sentJson = new URL(requestUrl).searchParams.get('nostr') ?? '';
+				const { invoice } = await zapInvoice(sentJson);
+				return new Response(JSON.stringify({ pr: invoice, routes: [] }), {
 					status: 200,
 					statusText: 'OK'
-				})
-			);
+				});
+			});
 		vi.stubGlobal('fetch', fetcher);
 		const signEvent = vi.fn().mockImplementation(async (event) => ({
 			...event,
@@ -80,11 +92,18 @@ describe('Zap debugger protocol boundaries', () => {
 			id: '0'.repeat(64),
 			sig: '0'.repeat(128)
 		});
+		const sentJson = callbackUrl.searchParams.get('nostr') ?? '';
+		const { invoice, hash } = await zapInvoice(sentJson);
 		await expect.element(page.getByText(invoice)).toBeInTheDocument();
 		await page.getByRole('button', { name: 'Decode invoice' }).click();
 		await expect.element(page.getByText('1000', { exact: true }).last()).toBeInTheDocument();
 		await expect
 			.element(page.getByText('✓ Invoice amount matches requested amount'))
+			.toBeInTheDocument();
+		await page.getByRole('button', { name: 'Verify description hash' }).click();
+		await expect.element(page.getByText(hash, { exact: true }).first()).toBeInTheDocument();
+		await expect
+			.element(page.getByText('✓ Invoice description hash matches Zap Request'))
 			.toBeInTheDocument();
 	});
 });

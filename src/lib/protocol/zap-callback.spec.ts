@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { HttpInspection } from './http';
 import {
 	buildZapCallbackUrl,
+	buildZapCallbackRequest,
 	interpretZapCallbackResponse,
 	type ZapCallbackInput
 } from './zap-callback';
@@ -23,6 +24,12 @@ const input: ZapCallbackInput = {
 };
 
 describe('Zap callback URL', () => {
+	it('returns the exact JSON string placed in the nostr query parameter', () => {
+		const request = buildZapCallbackRequest(input);
+		expect(new URL(request.requestUrl).searchParams.get('nostr')).toBe(request.zapRequestJson);
+		expect(request.zapRequestJson).toBe(JSON.stringify(signedZapRequest));
+	});
+
 	it('adds NIP-57 parameters and preserves existing callback parameters', () => {
 		const url = new URL(buildZapCallbackUrl(input));
 		expect(url.searchParams.get('provider')).toBe('value one');
