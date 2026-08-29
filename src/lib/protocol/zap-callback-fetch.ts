@@ -1,6 +1,6 @@
 import { fetchLnurlPay, type HttpInspection } from './http';
 import {
-	buildZapCallbackUrl,
+	buildZapCallbackRequest,
 	interpretZapCallbackResponse,
 	type ZapCallbackInput,
 	type ZapCallbackResult
@@ -11,12 +11,13 @@ export type ZapCallbackFetcher = (url: string) => Promise<HttpInspection>;
 export type ZapCallbackFetchResult = {
 	input: ZapCallbackInput;
 	requestUrl: string;
+	zapRequestJson: string;
 	http: HttpInspection;
 	callback?: ZapCallbackResult;
 };
 
 export type ZapCallbackFetchHooks = {
-	onStart(requestUrl: string): void;
+	onStart(request: { requestUrl: string; zapRequestJson: string }): void;
 	onSuccess(result: ZapCallbackFetchResult): void;
 	onFinish(): void;
 };
@@ -35,9 +36,9 @@ export class ZapCallbackFetchController {
 	): Promise<void> {
 		const attempt = ++this.#generation;
 		const capturedInput = structuredClone(input);
-		const requestUrl = buildZapCallbackUrl(capturedInput);
-		hooks.onStart(requestUrl);
-		return this.#run(attempt, capturedInput, requestUrl, hooks, fetcher);
+		const request = buildZapCallbackRequest(capturedInput);
+		hooks.onStart(request);
+		return this.#run(attempt, capturedInput, request, hooks, fetcher);
 	}
 
 	#isCurrent(attempt: number): boolean {
@@ -47,16 +48,16 @@ export class ZapCallbackFetchController {
 	async #run(
 		attempt: number,
 		input: ZapCallbackInput,
-		requestUrl: string,
+		request: { requestUrl: string; zapRequestJson: string },
 		hooks: ZapCallbackFetchHooks,
 		fetcher: ZapCallbackFetcher
 	): Promise<void> {
 		try {
-			const http = await fetcher(requestUrl);
+			const http = await fetcher(request.requestUrl);
 			if (!this.#isCurrent(attempt)) return;
 			hooks.onSuccess({
 				input,
-				requestUrl,
+				...request,
 				http,
 				callback: interpretZapCallbackResponse(http)
 			});

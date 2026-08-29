@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { inspectBolt11Amount, type Bolt11AmountResult } from '$lib/protocol/bolt11';
+	import {
+		inspectBolt11Amount,
+		verifyBolt11DescriptionHash,
+		type Bolt11AmountResult,
+		type DescriptionHashVerificationResult
+	} from '$lib/protocol/bolt11';
 	import type { HttpInspection } from '$lib/protocol/http';
 	import { LnurlPayFetchController } from '$lib/protocol/lnurl-pay-fetch';
 	import { encodeLnurl } from '$lib/protocol/lnurl-bech32';
@@ -52,9 +57,13 @@
 	let signedRaw = $state.raw<unknown>();
 	let callbackLoading = $state(false);
 	let callbackRequestUrl = $state<string>();
+	let callbackZapRequestJson = $state<string>();
 	let callbackHttp = $state<HttpInspection>();
 	let callbackResult = $state<ZapCallbackResult>();
 	let invoiceAmountResult = $state<Bolt11AmountResult>();
+	let descriptionHashResult = $state<DescriptionHashVerificationResult>();
+	let descriptionHashLoading = $state(false);
+	let descriptionHashGeneration = 0;
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
 	const callbackController = new ZapCallbackFetchController();
@@ -72,9 +81,16 @@
 		callbackController.invalidate();
 		callbackLoading = false;
 		callbackRequestUrl = undefined;
+		callbackZapRequestJson = undefined;
 		callbackHttp = undefined;
 		callbackResult = undefined;
 		invoiceAmountResult = undefined;
+		resetDescriptionHash();
+	}
+	function resetDescriptionHash() {
+		descriptionHashGeneration += 1;
+		descriptionHashLoading = false;
+		descriptionHashResult = undefined;
 	}
 	function resetSigned() {
 		signingController.invalidate();
@@ -241,15 +257,18 @@
 				encodedLnurl
 			},
 			{
-				onStart: (requestUrl) => {
+				onStart: ({ requestUrl, zapRequestJson }) => {
 					callbackLoading = true;
 					callbackRequestUrl = requestUrl;
+					callbackZapRequestJson = zapRequestJson;
 					callbackHttp = undefined;
 					callbackResult = undefined;
 					invoiceAmountResult = undefined;
+					resetDescriptionHash();
 				},
 				onSuccess: (result) => {
 					callbackRequestUrl = result.requestUrl;
+					callbackZapRequestJson = result.zapRequestJson;
 					callbackHttp = result.http;
 					callbackResult = result.callback;
 				},
@@ -261,7 +280,26 @@
 	}
 	function decodeInvoice() {
 		if (callbackResult?.kind !== 'invoice') return;
+		resetDescriptionHash();
 		invoiceAmountResult = inspectBolt11Amount(callbackResult.pr);
+	}
+	async function verifyDescriptionHash() {
+		if (
+			callbackResult?.kind !== 'invoice' ||
+			callbackZapRequestJson === undefined ||
+			invoiceAmountResult === undefined ||
+			invoiceAmountResult.status === 'failure'
+		)
+			return;
+		const generation = ++descriptionHashGeneration;
+		const invoice = callbackResult.pr;
+		const zapRequestJson = callbackZapRequestJson;
+		descriptionHashLoading = true;
+		descriptionHashResult = undefined;
+		const result = await verifyBolt11DescriptionHash(invoice, zapRequestJson);
+		if (generation !== descriptionHashGeneration) return;
+		descriptionHashResult = result;
+		descriptionHashLoading = false;
 	}
 	const formattedJson = (value: unknown) => JSON.stringify(value, null, 2);
 	const zapReady = () =>
@@ -733,5 +771,45 @@
 				</div>
 			</div>
 		{:else}<p class="muted">Get a Lightning invoice from the callback in Step 7 first.</p>{/if}
+	</section>
+	<section>
+		<h2><span>9</span> Verify invoice description hash</h2>
+		{#if callbackResult?.kind === 'invoice' && callbackZapRequestJson !== undefined && invoiceAmountResult && invoiceAmountResult.status !== 'failure'}
+			<div class="grid">
+				<div>
+					<h3>Input</h3>
+					<dl>
+						<dt>Lightning invoice</dt>
+						<dd class="break">{callbackResult.pr}</dd>
+					</dl>
+					<h3>Zap Request JSON actually sent in Step 7</h3>
+					<pre>{callbackZapRequestJson}</pre>
+					<button onclick={verifyDescriptionHash} disabled={descriptionHashLoading}
+						>{descriptionHashLoading ? 'Verifying…' : 'Verify description hash'}</button
+					>
+				</div>
+				<div>
+					<h3>Verification result</h3>
+					{#if descriptionHashResult?.status === 'failure'}
+						<p class="errors" role="alert">✕ {descriptionHashResult.reason}</p>
+					{:else if descriptionHashResult}
+						<dl>
+							<dt>Invoice description hash (h)</dt>
+							<dd class="break">{descriptionHashResult.invoiceHashHex}</dd>
+							<dt>SHA-256 of the sent Zap Request JSON</dt>
+							<dd class="break">{descriptionHashResult.calculatedHashHex}</dd>
+							<dt>Comparison</dt>
+							<dd>
+								{#if descriptionHashResult.status === 'match'}
+									<span class="success">✓ Invoice description hash matches Zap Request</span>
+								{:else}
+									<span class="errors">✕ Invoice description hash does not match Zap Request</span>
+								{/if}
+							</dd>
+						</dl>
+					{:else}<p class="muted">Not run</p>{/if}
+				</div>
+			</div>
+		{:else}<p class="muted">Decode the Lightning invoice in Step 8 first.</p>{/if}
 	</section>
 </main>
