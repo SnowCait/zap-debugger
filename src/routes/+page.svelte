@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import InvoiceQr from '$lib/InvoiceQr.svelte';
 	import {
 		inspectBolt11Amount,
 		verifyBolt11DescriptionHash,
@@ -31,6 +32,7 @@
 	import type { ZapCallbackResult } from '$lib/protocol/zap-callback';
 	import { ZapCallbackFetchController } from '$lib/protocol/zap-callback-fetch';
 	import type { ValidationItem } from '$lib/protocol/validation';
+	import { createPaymentHandoffValues, isPaymentHandoffReady } from '$lib/protocol/payment-handoff';
 
 	let input = $state('');
 	let addressResult = $state<AddressParseResult>();
@@ -64,6 +66,8 @@
 	let descriptionHashResult = $state<DescriptionHashVerificationResult>();
 	let descriptionHashLoading = $state(false);
 	let descriptionHashGeneration = 0;
+	let copyStatus = $state<'copied' | 'failed'>();
+	let copyGeneration = 0;
 	const signingController = new Nip07SigningController();
 	const fetchController = new LnurlPayFetchController();
 	const callbackController = new ZapCallbackFetchController();
@@ -91,6 +95,8 @@
 		descriptionHashGeneration += 1;
 		descriptionHashLoading = false;
 		descriptionHashResult = undefined;
+		copyGeneration += 1;
+		copyStatus = undefined;
 	}
 	function resetSigned() {
 		signingController.invalidate();
@@ -296,10 +302,22 @@
 		const zapRequestJson = callbackZapRequestJson;
 		descriptionHashLoading = true;
 		descriptionHashResult = undefined;
+		copyGeneration += 1;
+		copyStatus = undefined;
 		const result = await verifyBolt11DescriptionHash(invoice, zapRequestJson);
 		if (generation !== descriptionHashGeneration) return;
 		descriptionHashResult = result;
 		descriptionHashLoading = false;
+	}
+	async function copyInvoice(invoice: string) {
+		const generation = ++copyGeneration;
+		copyStatus = undefined;
+		try {
+			await navigator.clipboard.writeText(invoice);
+			if (generation === copyGeneration) copyStatus = 'copied';
+		} catch {
+			if (generation === copyGeneration) copyStatus = 'failed';
+		}
 	}
 	const formattedJson = (value: unknown) => JSON.stringify(value, null, 2);
 	const zapReady = () =>
@@ -316,6 +334,15 @@
 		amountResult?.valid === true &&
 		relayResult?.valid === true &&
 		encodedLnurl !== undefined;
+	const paymentReady = () =>
+		isPaymentHandoffReady({
+			invoice: callbackResult?.kind === 'invoice' ? callbackResult.pr : undefined,
+			requestedAmountMsat:
+				amountResult?.amount === undefined ? undefined : BigInt(amountResult.amount),
+			decodedAmountMsat:
+				invoiceAmountResult?.status === 'specified' ? invoiceAmountResult.amountMsat : undefined,
+			descriptionHashStatus: descriptionHashResult?.status
+		});
 </script>
 
 <svelte:head
@@ -811,5 +838,47 @@
 				</div>
 			</div>
 		{:else}<p class="muted">Decode the Lightning invoice in Step 8 first.</p>{/if}
+	</section>
+	<section>
+		<h2><span>10</span> Pay invoice</h2>
+		{#if paymentReady() && callbackResult?.kind === 'invoice' && invoiceAmountResult?.status === 'specified'}
+			{@const handoff = createPaymentHandoffValues(callbackResult.pr)}
+			<p>Pay this invoice with your Lightning wallet, then continue to the next step.</p>
+			<div class="grid">
+				<div>
+					<h3>Payment handoff</h3>
+					<dl>
+						<dt>Amount (msat)</dt>
+						<dd>{invoiceAmountResult.amountMsat.toString()}</dd>
+						<dt>Lightning invoice</dt>
+						<dd class="break">{callbackResult.pr}</dd>
+					</dl>
+					<div class="actions">
+						<button onclick={() => copyInvoice(handoff.clipboardValue)}>Copy invoice</button>
+						<!-- A custom protocol URI must not be rewritten as an application route. -->
+						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+						<a class="button secondary" href={handoff.openWalletUri}>Open wallet</a>
+					</div>
+					{#if copyStatus === 'copied'}
+						<p class="success" role="status">✓ Copied</p>
+					{:else if copyStatus === 'failed'}
+						<p class="errors" role="alert">✕ Failed to copy invoice</p>
+					{/if}
+				</div>
+				<div>
+					<h3>QR code</h3>
+					<div class="qr"><InvoiceQr payload={handoff.qrPayload} /></div>
+					<dl>
+						<dt>QR payload</dt>
+						<dd class="break">{handoff.qrPayload}</dd>
+					</dl>
+				</div>
+			</div>
+			<p class="notice">After paying the invoice, continue by waiting for the Zap Receipt.</p>
+		{:else}
+			<p class="muted">
+				Payment handoff is available only after the invoice amount and description hash both match.
+			</p>
+		{/if}
 	</section>
 </main>

@@ -24,6 +24,8 @@ afterEach(() => {
 
 describe('Zap debugger protocol boundaries', () => {
 	it('passes raw endpoint, unsigned event, and signed event to structured-cloning controllers', async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		vi.spyOn(navigator.clipboard, 'writeText').mockImplementation(writeText);
 		const payResponse = {
 			tag: 'payRequest',
 			callback: 'https://example.com/callback',
@@ -105,5 +107,18 @@ describe('Zap debugger protocol boundaries', () => {
 		await expect
 			.element(page.getByText('✓ Invoice description hash matches Zap Request'))
 			.toBeInTheDocument();
+		await expect.element(page.getByRole('heading', { name: '10 Pay invoice' })).toBeInTheDocument();
+		await expect
+			.element(page.getByAltText('QR code for opening this invoice in a Lightning wallet'))
+			.toBeInTheDocument();
+		const openWallet = page.getByRole('link', { name: 'Open wallet' });
+		await expect.element(openWallet).toHaveAttribute('href', `lightning:${invoice}`);
+		await page.getByRole('button', { name: 'Copy invoice' }).click();
+		expect(writeText).toHaveBeenCalledWith(invoice);
+		await expect.element(page.getByText('✓ Copied')).toBeInTheDocument();
+
+		writeText.mockRejectedValueOnce(new Error('denied'));
+		await page.getByRole('button', { name: 'Copy invoice' }).click();
+		await expect.element(page.getByText('✕ Failed to copy invoice')).toBeInTheDocument();
 	});
 });
