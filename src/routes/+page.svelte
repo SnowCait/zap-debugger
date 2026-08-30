@@ -39,13 +39,13 @@
 					autocomplete="off"
 					spellcheck="false"
 				/><button onclick={debuggerState.validateAddress} disabled={!debuggerState.input}
-					>Validate debuggerState.address</button
+					>Validate address</button
 				>
 			</div>
 			<div>
 				<h3>Transformation</h3>
 				<p>
-					Split at <code>@</code> without normalizing or silently correcting the debuggerState.input.
+					Split at <code>@</code> without normalizing or silently correcting the input.
 				</p>
 				<h3>Validation</h3>
 				{#if debuggerState.addressResult?.valid}<p class="success">
@@ -65,13 +65,11 @@
 					<dt>Domain</dt>
 					<dd>{debuggerState.address.domain}</dd>
 				</dl>
-				<button onclick={debuggerState.resolveEndpoint}
-					>Resolve LNURL-pay debuggerState.endpoint</button
-				>
+				<button onclick={debuggerState.resolveEndpoint}>Resolve LNURL-pay endpoint</button>
 			</div>{/if}
 	</section>
 	<section>
-		<h2><span>2</span> Resolve LNURL-pay debuggerState.endpoint</h2>
+		<h2><span>2</span> Resolve LNURL-pay endpoint</h2>
 		{#if debuggerState.endpoint}<div class="grid">
 				<div>
 					<h3>Input</h3>
@@ -87,7 +85,7 @@
 				<div>
 					<h3>Transformation</h3>
 					<p>
-						Select <code>debuggerState.http</code> for <code>.onion</code>; otherwise select
+						Select <code>http</code> for <code>.onion</code>; otherwise select
 						<code>https</code>. Append the LUD-16 well-known path.
 					</p>
 					<h3>Validation</h3>
@@ -105,9 +103,7 @@
 				<button onclick={debuggerState.runGet} disabled={debuggerState.loading}
 					>{debuggerState.loading ? 'Requesting…' : 'GET LNURL-pay endpoint'}</button
 				>
-			</div>{:else}<p class="muted">
-				Complete Step 1 and explicitly resolve the debuggerState.endpoint.
-			</p>{/if}
+			</div>{:else}<p class="muted">Complete Step 1 and explicitly resolve the endpoint.</p>{/if}
 	</section>
 	<section>
 		<h2><span>3</span> Fetch and validate LNURL-pay response</h2>
@@ -261,11 +257,11 @@
 				<div>
 					<h3>Transformation</h3>
 					<dl>
-						<dt>Recipient debuggerState.input</dt>
+						<dt>Recipient input</dt>
 						<dd class="break">{debuggerState.recipientResult?.input ?? '(not validated)'}</dd>
 						<dt>Recipient normalized hex</dt>
 						<dd class="break">{debuggerState.recipientResult?.normalized ?? '(unavailable)'}</dd>
-						<dt>Amount debuggerState.input</dt>
+						<dt>Amount input</dt>
 						<dd>{debuggerState.amountResult?.input ?? '(not validated)'}</dd>
 						<dt>Amount normalized (msat)</dt>
 						<dd>{debuggerState.amountResult?.amount ?? '(unavailable)'}</dd>
@@ -315,7 +311,7 @@
 		{#if debuggerState.unsignedEvent}
 			<div class="raw-grid grid">
 				<div>
-					<h3>NIP-07 debuggerState.signing debuggerState.input</h3>
+					<h3>NIP-07 signing input</h3>
 					<pre>{debuggerState.formattedJson(debuggerState.unsignedEvent)}</pre>
 				</div>
 				<div>
@@ -381,7 +377,7 @@
 		<h2><span>7</span> GET Zap callback</h2>
 		{#if debuggerState.signedRaw !== undefined && debuggerState.amountResult?.amount !== undefined && debuggerState.encodedLnurl && debuggerState.lud06?.kind === 'payRequest' && debuggerState.lud06.data.callback}
 			<div class="output">
-				<h3>Callback debuggerState.input</h3>
+				<h3>Callback input</h3>
 				<dl>
 					<dt>Callback URL</dt>
 					<dd class="break">{debuggerState.lud06.data.callback}</dd>
@@ -600,7 +596,7 @@
 			</p>
 			<div class="grid">
 				<div>
-					<h3>Subscription debuggerState.input</h3>
+					<h3>Subscription input</h3>
 					<dl>
 						<dt>Recipient pubkey</dt>
 						<dd class="break">{debuggerState.receiptRecipient()}</dd>
