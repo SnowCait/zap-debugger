@@ -602,3 +602,5 @@ export function createZapDebuggerState() {
 		dispose
 	};
 }
+
+export type ZapDebuggerState = ReturnType<typeof createZapDebuggerState>;
