@@ -1,10 +1,9 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import InvoiceQr from '$lib/InvoiceQr.svelte';
 	import InvoiceSteps from '$lib/components/zap-debugger/InvoiceSteps.svelte';
 	import LnurlDiscoverySteps from '$lib/components/zap-debugger/LnurlDiscoverySteps.svelte';
+	import PaymentStep from '$lib/components/zap-debugger/PaymentStep.svelte';
 	import ZapRequestSteps from '$lib/components/zap-debugger/ZapRequestSteps.svelte';
-	import { createPaymentHandoffValues } from '$lib/protocol/payment-handoff';
 	import {
 		calculateZapReceiptSince,
 		RECEIPT_CLOCK_SKEW_MARGIN_SECONDS
@@ -32,50 +31,7 @@
 	<LnurlDiscoverySteps state={debuggerState} />
 	<ZapRequestSteps state={debuggerState} />
 	<InvoiceSteps state={debuggerState} />
-	<section>
-		<h2><span>10</span> Pay invoice</h2>
-		{#if debuggerState.paymentReady() && debuggerState.callbackResult?.kind === 'invoice' && debuggerState.invoiceAmountResult?.status === 'specified'}
-			{@const handoff = createPaymentHandoffValues(debuggerState.callbackResult.pr)}
-			<p>Pay this invoice with your Lightning wallet, then continue to the next step.</p>
-			<div class="grid">
-				<div>
-					<h3>Payment handoff</h3>
-					<dl>
-						<dt>Amount (msat)</dt>
-						<dd>{debuggerState.invoiceAmountResult.amountMsat.toString()}</dd>
-						<dt>Lightning invoice</dt>
-						<dd class="break">{debuggerState.callbackResult.pr}</dd>
-					</dl>
-					<div class="actions">
-						<button onclick={() => debuggerState.copyInvoice(handoff.clipboardValue)}
-							>Copy invoice</button
-						>
-						<!-- A custom protocol URI must not be rewritten as an application route. -->
-						<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-						<a class="button secondary" href={handoff.openWalletUri}>Open wallet</a>
-					</div>
-					{#if debuggerState.copyStatus === 'copied'}
-						<p class="success" role="status">✓ Copied</p>
-					{:else if debuggerState.copyStatus === 'failed'}
-						<p class="errors" role="alert">✕ Failed to copy invoice</p>
-					{/if}
-				</div>
-				<div>
-					<h3>QR code</h3>
-					<div class="qr"><InvoiceQr payload={handoff.qrPayload} /></div>
-					<dl>
-						<dt>QR payload</dt>
-						<dd class="break">{handoff.qrPayload}</dd>
-					</dl>
-				</div>
-			</div>
-			<p class="notice">After paying the invoice, continue by waiting for the Zap Receipt.</p>
-		{:else}
-			<p class="muted">
-				Payment handoff is available only after the invoice amount and description hash both match.
-			</p>
-		{/if}
-	</section>
+	<PaymentStep state={debuggerState} />
 	<section>
 		<h2><span>11</span> Wait for Zap Receipt</h2>
 		{#if debuggerState.receiptReady() && debuggerState.callbackResult?.kind === 'invoice'}
