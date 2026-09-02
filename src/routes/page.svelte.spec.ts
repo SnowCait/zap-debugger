@@ -128,7 +128,13 @@ describe('Zap debugger protocol boundaries', () => {
 		});
 		const sentJson = callbackUrl.searchParams.get('nostr') ?? '';
 		const { invoice, hash } = await zapInvoice(sentJson);
-		await expect.element(page.getByText(invoice)).toBeInTheDocument();
+		const callbackStepHeading = page.getByRole('heading', { name: '7 GET Zap callback' });
+		await expect.element(callbackStepHeading).toBeInTheDocument();
+		const callbackStep = page.elementLocator(callbackStepHeading.element().closest('section')!);
+		const invoiceHeading = callbackStep.getByRole('heading', { name: 'Lightning invoice (pr)' });
+		await expect.element(invoiceHeading).toBeInTheDocument();
+		const invoiceOutput = page.elementLocator(invoiceHeading.element().nextElementSibling!);
+		await expect.element(invoiceOutput).toHaveTextContent(invoice);
 		await page.getByRole('button', { name: 'Decode invoice' }).click();
 		await expect.element(page.getByText('1000', { exact: true }).last()).toBeInTheDocument();
 		await expect
@@ -153,9 +159,9 @@ describe('Zap debugger protocol boundaries', () => {
 		await page.getByRole('button', { name: 'Copy invoice' }).click();
 		await expect.element(page.getByText('✕ Failed to copy invoice')).toBeInTheDocument();
 
-		await expect
-			.element(page.getByRole('heading', { name: '11 Wait for Zap Receipt' }))
-			.toBeInTheDocument();
+		const receiptStepHeading = page.getByRole('heading', { name: '11 Wait for Zap Receipt' });
+		await expect.element(receiptStepHeading).toBeInTheDocument();
+		const receiptStep = page.elementLocator(receiptStepHeading.element().closest('section')!);
 		await page.getByRole('button', { name: 'Wait for Zap Receipt' }).click();
 		expect(MockWebSocket.instances).toHaveLength(1);
 		const socket = MockWebSocket.instances[0] as MockWebSocket;
@@ -194,7 +200,9 @@ describe('Zap debugger protocol boundaries', () => {
 			sig: hex(schnorr.sign(raw(candidateId), secretKey))
 		};
 		socket.message(['EVENT', request[1], candidate]);
-		await expect.element(page.getByText('Candidate Zap Receipt 1')).toBeInTheDocument();
+		await expect
+			.element(receiptStep.getByRole('heading', { name: 'Candidate Zap Receipt 1', exact: true }))
+			.toBeInTheDocument();
 		await expect.element(page.getByText(candidateId, { exact: true }).first()).toBeInTheDocument();
 		await expect.element(page.getByText(JSON.stringify(candidate, null, 2))).toBeInTheDocument();
 		await page.getByRole('button', { name: 'Validate Zap Receipt' }).click();
@@ -210,7 +218,9 @@ describe('Zap debugger protocol boundaries', () => {
 			.toBeInTheDocument();
 		const invalid = { ...candidate, id: '0'.repeat(64), pubkey: '2'.repeat(64) };
 		socket.message(['EVENT', request[1], invalid]);
-		await expect.element(page.getByText('Candidate Zap Receipt 2')).toBeInTheDocument();
+		await expect
+			.element(receiptStep.getByRole('heading', { name: 'Candidate Zap Receipt 2', exact: true }))
+			.toBeInTheDocument();
 		await page.getByRole('button', { name: 'Validate Zap Receipt' }).last().click();
 		await expect.element(page.getByText('✕ Invalid Zap Receipt')).toBeInTheDocument();
 		await page.getByRole('button', { name: 'Stop waiting' }).click();
