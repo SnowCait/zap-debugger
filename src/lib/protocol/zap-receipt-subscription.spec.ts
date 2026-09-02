@@ -110,18 +110,58 @@ describe('Zap Receipt subscription protocol', () => {
 		expect(isZapReceiptCandidate({ kind: 1, tags: [['bolt11', invoice]] }, invoice)).toBe(false);
 	});
 
-	it('deduplicates event ids across relays and retains distinct events', () => {
+	it('deduplicates identical payloads across relays and retains distinct events', () => {
 		const { sockets, state } = setup(['wss://relay-a.example', 'wss://relay-b.example']);
 		for (const socket of sockets.values()) socket.open();
 		const sub = state().subscriptionId;
-		sockets.get('wss://relay-a.example')?.message(['EVENT', sub, receipt('one')]);
-		sockets.get('wss://relay-b.example')?.message(['EVENT', sub, receipt('one')]);
+		const event = { ...receipt('one'), extra: { first: true, second: ['value'] } };
+		sockets.get('wss://relay-a.example')?.message(['EVENT', sub, event]);
+		sockets
+			.get('wss://relay-b.example')
+			?.message(['EVENT', sub, { extra: { second: ['value'], first: true }, ...receipt('one') }]);
+		sockets.get('wss://relay-b.example')?.message(['EVENT', sub, event]);
 		sockets.get('wss://relay-a.example')?.message(['EVENT', sub, receipt('two')]);
 		expect(state().candidates).toHaveLength(2);
+		expect(state().candidates[0]?.event).toEqual(event);
 		expect(state().candidates[0]?.sourceRelays).toEqual([
 			'wss://relay-a.example',
 			'wss://relay-b.example'
 		]);
+	});
+
+	it('retains different payloads that claim the same event id', () => {
+		const { sockets, state } = setup();
+		const socket = sockets.get('wss://relay-a.example') as FakeSocket;
+		socket.open();
+		const sub = state().subscriptionId;
+		const first = { ...receipt('shared'), content: 'first', sig: 'aa' };
+		const second = { ...receipt('shared'), content: 'second', sig: 'bb' };
+		socket.message(['EVENT', sub, first]);
+		socket.message(['EVENT', sub, second]);
+
+		expect(state().candidates).toHaveLength(2);
+		expect(state().candidates.map((candidate) => candidate.event)).toEqual([first, second]);
+		expect(state().candidates[0]?.key).not.toBe(state().candidates[1]?.key);
+	});
+
+	it('deduplicates each payload variant independently across relays', () => {
+		const relayA = 'wss://relay-a.example';
+		const relayB = 'wss://relay-b.example';
+		const { sockets, state } = setup([relayA, relayB]);
+		for (const socket of sockets.values()) socket.open();
+		const sub = state().subscriptionId;
+		const variantA = { ...receipt('shared'), content: 'variant-a' };
+		const variantB = { ...receipt('shared'), content: 'variant-b' };
+		sockets.get(relayA)?.message(['EVENT', sub, variantA]);
+		sockets.get(relayA)?.message(['EVENT', sub, variantB]);
+		sockets.get(relayB)?.message(['EVENT', sub, variantB]);
+
+		expect(state().candidates).toHaveLength(2);
+		expect(state().candidates[0]).toMatchObject({ event: variantA, sourceRelays: [relayA] });
+		expect(state().candidates[1]).toMatchObject({
+			event: variantB,
+			sourceRelays: [relayA, relayB]
+		});
 	});
 
 	it('keeps listening after EOSE and observes NOTICE, CLOSED, and malformed JSON', () => {

@@ -69,6 +69,7 @@ export class ZapReceiptSubscriptionController {
 	private state: ZapReceiptSubscriptionState = { waiting: false, relays: [], candidates: [] };
 	private listener?: StateListener;
 	private anonymousCandidate = 0;
+	private candidateVariant = 0;
 
 	constructor(private readonly createSocket: SocketFactory = (relay) => new WebSocket(relay)) {}
 
@@ -85,6 +86,7 @@ export class ZapReceiptSubscriptionController {
 		const subscriptionId = `zap-${generation}-${Math.random().toString(36).slice(2, 8)}`;
 		this.listener = input.onState;
 		this.anonymousCandidate = 0;
+		this.candidateVariant = 0;
 		this.state = {
 			waiting: true,
 			subscriptionId,
@@ -182,13 +184,19 @@ export class ZapReceiptSubscriptionController {
 
 	private addCandidate(relay: string, event: Record<string, unknown>): void {
 		const id = typeof event.id === 'string' && event.id.length > 0 ? event.id : undefined;
-		const key = id ? `id:${id}` : `anonymous:${++this.anonymousCandidate}`;
 		const existing = id
-			? this.state.candidates.find((candidate) => candidate.key === key)
+			? this.state.candidates.find(
+					(candidate) => candidate.event.id === id && jsonValuesEqual(candidate.event, event)
+				)
 			: undefined;
 		if (existing) {
 			if (!existing.sourceRelays.includes(relay)) existing.sourceRelays.push(relay);
 		} else {
+			const baseKey = id ? `id:${id}` : `anonymous:${++this.anonymousCandidate}`;
+			let key = baseKey;
+			while (this.state.candidates.some((candidate) => candidate.key === key)) {
+				key = `${baseKey}:variant:${++this.candidateVariant}`;
+			}
 			this.state.candidates.push({ key, event, sourceRelays: [relay] });
 		}
 		this.emit();
@@ -213,6 +221,27 @@ export class ZapReceiptSubscriptionController {
 	private emit(): void {
 		this.listener?.(structuredClone(this.state));
 	}
+}
+
+function jsonValuesEqual(left: unknown, right: unknown): boolean {
+	if (left === right) return true;
+	if (typeof left !== 'object' || left === null || typeof right !== 'object' || right === null) {
+		return false;
+	}
+	if (Array.isArray(left) || Array.isArray(right)) {
+		if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) return false;
+		return left.every((value, index) => jsonValuesEqual(value, right[index]));
+	}
+	const leftRecord = left as Record<string, unknown>;
+	const rightRecord = right as Record<string, unknown>;
+	const leftKeys = Object.keys(leftRecord);
+	const rightKeys = Object.keys(rightRecord);
+	return (
+		leftKeys.length === rightKeys.length &&
+		leftKeys.every(
+			(key) => Object.hasOwn(rightRecord, key) && jsonValuesEqual(leftRecord[key], rightRecord[key])
+		)
+	);
 }
 
 function formattedMessage(value: unknown): string {
