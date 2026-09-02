@@ -1,14 +1,14 @@
 import { page } from 'vitest/browser';
 import { describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
+import QRCode from 'qrcode';
 
-const { toDataURL } = vi.hoisted(() => ({
-	toDataURL: vi.fn().mockResolvedValue('data:image/png;base64,cXI=')
-}));
-
-vi.mock('qrcode', () => ({ default: { toDataURL } }));
+vi.mock(import('qrcode'), { spy: true });
 
 import InvoiceQr from './InvoiceQr.svelte';
+
+const toDataURL = vi.mocked(QRCode.toDataURL);
+toDataURL.mockImplementation(vi.fn().mockResolvedValue('data:image/png;base64,cXI='));
 
 describe('Invoice QR code', () => {
 	it('passes the exact payment payload to the QR generator', async () => {

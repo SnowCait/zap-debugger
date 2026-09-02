@@ -128,7 +128,13 @@ describe('Zap debugger protocol boundaries', () => {
 		});
 		const sentJson = callbackUrl.searchParams.get('nostr') ?? '';
 		const { invoice, hash } = await zapInvoice(sentJson);
-		await expect.element(page.getByText(invoice)).toBeInTheDocument();
+		const callbackStepHeading = page.getByRole('heading', { name: '7 GET Zap callback' });
+		await expect.element(callbackStepHeading).toBeInTheDocument();
+		const callbackStep = page.elementLocator(callbackStepHeading.element().closest('section')!);
+		const invoiceHeading = callbackStep.getByRole('heading', { name: 'Lightning invoice (pr)' });
+		await expect.element(invoiceHeading).toBeInTheDocument();
+		const invoiceOutput = page.elementLocator(invoiceHeading.element().nextElementSibling!);
+		await expect.element(invoiceOutput).toHaveTextContent(invoice);
 		await page.getByRole('button', { name: 'Decode invoice' }).click();
 		await expect.element(page.getByText('1000', { exact: true }).last()).toBeInTheDocument();
 		await expect
