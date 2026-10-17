@@ -62,7 +62,7 @@ describe('Zap debugger protocol boundaries', () => {
 					callback: 'https://example.com/callback',
 					minSendable: 1000,
 					maxSendable: 100000,
-					metadata: '[]',
+					metadata: '[["text/plain","Example"]]',
 					allowsNostr: true,
 					nostrPubkey: pubkey
 				}),
