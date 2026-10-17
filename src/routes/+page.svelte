@@ -9,7 +9,16 @@
 
 	const debuggerState = createZapDebuggerState();
 
-	onMount(debuggerState.refreshSignerAvailability);
+	onMount(() => {
+		debuggerState.refreshSignerAvailability();
+
+		const params = new URLSearchParams(window.location.search);
+		const lightningAddress = params.get('lud16');
+		const recipientPubkey = params.get('npub');
+
+		if (lightningAddress !== null) debuggerState.changeInput(lightningAddress);
+		if (recipientPubkey !== null) debuggerState.changeZapParameter('recipient', recipientPubkey);
+	});
 	onDestroy(debuggerState.dispose);
 </script>
 
