@@ -53,6 +53,43 @@ afterEach(() => {
 });
 
 describe('Zap debugger protocol boundaries', () => {
+	it('prefills URL parameters without running validation or making requests', async () => {
+		window.history.replaceState({}, '', '/?lud16=alice%40example.com&npub=not-a-valid-npub');
+		const fetcher = vi.fn().mockResolvedValue(
+			new Response(
+				JSON.stringify({
+					tag: 'payRequest',
+					callback: 'https://example.com/callback',
+					minSendable: 1000,
+					maxSendable: 100000,
+					metadata: '[]',
+					allowsNostr: true,
+					nostrPubkey: pubkey
+				}),
+				{ status: 200, statusText: 'OK' }
+			)
+		);
+		vi.stubGlobal('fetch', fetcher);
+
+		render(ZapDebugger);
+		const addressInput = page.getByLabelText('Lightning Address');
+		await expect.element(addressInput).toHaveValue('alice@example.com');
+		await expect.element(page.getByText('Not run')).toBeInTheDocument();
+		expect(fetcher).not.toHaveBeenCalled();
+
+		await page.getByRole('button', { name: 'Validate address' }).click();
+		await page.getByRole('button', { name: 'Resolve LNURL-pay endpoint' }).click();
+		await page.getByRole('button', { name: 'GET LNURL-pay endpoint' }).click();
+
+		const recipientInput = page.getByLabelText('Recipient pubkey (hex or npub)');
+		await expect.element(recipientInput).toHaveValue('not-a-valid-npub');
+		await expect.element(page.getByText('Not run').last()).toBeInTheDocument();
+		expect(fetcher).toHaveBeenCalledOnce();
+
+		await addressInput.fill('edited@example.com');
+		await expect.element(addressInput).toHaveValue('edited@example.com');
+	});
+
 	it('passes raw endpoint, unsigned event, and signed event to structured-cloning controllers', async () => {
 		MockWebSocket.instances = [];
 		vi.stubGlobal('WebSocket', Object.assign(MockWebSocket, { OPEN: 1 }));
