@@ -6,10 +6,16 @@
 	import ReceiptSteps from '$lib/components/zap-debugger/ReceiptSteps.svelte';
 	import ZapRequestSteps from '$lib/components/zap-debugger/ZapRequestSteps.svelte';
 	import { createZapDebuggerState } from '$lib/zap-debugger-state.svelte';
+	import { m } from '$lib/paraglide/messages';
+	import { assertIsLocale, getLocale, getTextDirection, setLocale } from '$lib/paraglide/runtime';
 
 	const debuggerState = createZapDebuggerState();
 
 	onMount(() => {
+		const locale = getLocale();
+		document.documentElement.lang = locale;
+		document.documentElement.dir = getTextDirection(locale);
+
 		debuggerState.refreshSignerAvailability();
 
 		const params = new URLSearchParams(window.location.search);
@@ -32,7 +38,19 @@
 >
 <main>
 	<header>
-		<p class="eyebrow">Protocol inspector</p>
+		<div class="header-top">
+			<p class="eyebrow">Protocol inspector</p>
+			<label class="language-selector">
+				{m.language_label()}
+				<select
+					value={getLocale()}
+					onchange={(event) => setLocale(assertIsLocale(event.currentTarget.value))}
+				>
+					<option value="en" lang="en">English</option>
+					<option value="ja" lang="ja">日本語</option>
+				</select>
+			</label>
+		</div>
 		<h1>NIP-57 Zap Debugger</h1>
 		<p>Run Lightning Address discovery one step at a time and inspect every intermediate value.</p>
 	</header>
