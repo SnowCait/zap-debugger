@@ -33,13 +33,13 @@
 <svelte:head
 	><title>NIP-57 Zap Debugger</title><meta
 		name="description"
-		content="Inspect Lightning Address discovery for NIP-57 zaps"
+		content={m.page_meta_description()}
 	/></svelte:head
 >
 <main>
 	<header>
 		<div class="header-top">
-			<p class="eyebrow">Protocol inspector</p>
+			<p class="eyebrow">{m.page_eyebrow()}</p>
 			<label class="language-selector">
 				{m.language_label()}
 				<select
@@ -52,7 +52,7 @@
 			</label>
 		</div>
 		<h1>NIP-57 Zap Debugger</h1>
-		<p>Run Lightning Address discovery one step at a time and inspect every intermediate value.</p>
+		<p>{m.page_intro()}</p>
 	</header>
 	<LnurlDiscoverySteps state={debuggerState} />
 	<ZapRequestSteps state={debuggerState} />

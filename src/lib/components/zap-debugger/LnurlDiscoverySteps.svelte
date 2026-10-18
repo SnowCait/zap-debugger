@@ -1,14 +1,15 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import type { ZapDebuggerState } from '$lib/zap-debugger-state.svelte';
 
 	let { state }: { state: ZapDebuggerState } = $props();
 </script>
 
 <section>
-	<h2><span>1</span> Validate Lightning Address</h2>
+	<h2><span>1</span> {m.validate_lightning_address()}</h2>
 	<div class="grid">
 		<div>
-			<h3>Input</h3>
+			<h3>{m.ui_input()}</h3>
 			<label for="lightning-address">Lightning Address</label><input
 				id="lightning-address"
 				value={state.input}
@@ -16,159 +17,168 @@
 				placeholder="alice@example.com"
 				autocomplete="off"
 				spellcheck="false"
-			/><button onclick={state.validateAddress} disabled={!state.input}>Validate address</button>
+			/><button onclick={state.validateAddress} disabled={!state.input}
+				>{m.action_validate_address()}</button
+			>
 		</div>
 		<div>
-			<h3>Transformation</h3>
+			<h3>{m.ui_transformation()}</h3>
 			<p>
-				Split at <code>@</code> without normalizing or silently correcting the input.
+				{m.address_split_intro()} <code>@</code>
+				{m.address_split_outro()}
 			</p>
-			<h3>Validation</h3>
+			<h3>{m.ui_validation()}</h3>
 			{#if state.addressResult?.valid}<p class="success">
-					✓ Valid LUD-16 Lightning Address
+					✓ {m.address_valid()}
 				</p>{:else if state.addressResult}<ul class="errors">
 					{#each state.addressResult.errors as error (error)}<li>✕ {error}</li>{/each}
-				</ul>{:else}<p class="muted">Not run</p>{/if}
+				</ul>{:else}<p class="muted">{m.ui_not_run()}</p>{/if}
 		</div>
 	</div>
 	{#if state.address}<div class="output">
-			<h3>Output</h3>
+			<h3>{m.ui_output()}</h3>
 			<dl>
 				<dt>Lightning Address</dt>
 				<dd>{state.address.address}</dd>
-				<dt>Username</dt>
+				<dt>{m.field_username()}</dt>
 				<dd>{state.address.username}</dd>
-				<dt>Domain</dt>
+				<dt>{m.field_domain()}</dt>
 				<dd>{state.address.domain}</dd>
 			</dl>
-			<button onclick={state.resolveEndpoint}>Resolve LNURL-pay endpoint</button>
+			<button onclick={state.resolveEndpoint}>{m.resolve_endpoint()}</button>
 		</div>{/if}
 </section>
 <section>
-	<h2><span>2</span> Resolve LNURL-pay endpoint</h2>
+	<h2><span>2</span> {m.resolve_endpoint()}</h2>
 	{#if state.endpoint}<div class="grid">
 			<div>
-				<h3>Input</h3>
+				<h3>{m.ui_input()}</h3>
 				<dl>
 					<dt>Lightning Address</dt>
 					<dd>{state.endpoint.address}</dd>
-					<dt>Username</dt>
+					<dt>{m.field_username()}</dt>
 					<dd>{state.endpoint.username}</dd>
-					<dt>Domain</dt>
+					<dt>{m.field_domain()}</dt>
 					<dd>{state.endpoint.domain}</dd>
 				</dl>
 			</div>
 			<div>
-				<h3>Transformation</h3>
+				<h3>{m.ui_transformation()}</h3>
 				<p>
-					Select <code>http</code> for <code>.onion</code>; otherwise select
-					<code>https</code>. Append the LUD-16 well-known path.
+					{m.endpoint_scheme_intro()} <code>http</code>
+					{m.endpoint_onion_intro()} <code>.onion</code>{m.endpoint_otherwise()}
+					<code>https</code>{m.endpoint_path_instruction()}
 				</p>
-				<h3>Validation</h3>
-				<p class="success">✓ Endpoint resolved without an HTTP request</p>
+				<h3>{m.ui_validation()}</h3>
+				<p class="success">✓ {m.endpoint_resolved()}</p>
 			</div>
 		</div>
 		<div class="output">
-			<h3>Output</h3>
+			<h3>{m.ui_output()}</h3>
 			<dl>
-				<dt>Scheme</dt>
+				<dt>{m.field_scheme()}</dt>
 				<dd>{state.endpoint.scheme}</dd>
-				<dt>Resolved URL</dt>
+				<dt>{m.field_resolved_url()}</dt>
 				<dd class="break">{state.endpoint.url}</dd>
 			</dl>
 			<button onclick={state.runGet} disabled={state.loading}
-				>{state.loading ? 'Requesting…' : 'GET LNURL-pay endpoint'}</button
+				>{state.loading ? m.ui_requesting() : m.action_get_endpoint()}</button
 			>
-		</div>{:else}<p class="muted">Complete Step 1 and explicitly resolve the endpoint.</p>{/if}
+		</div>{:else}<p class="muted">{m.endpoint_prerequisite()}</p>{/if}
 </section>
 <section>
-	<h2><span>3</span> Fetch and validate LNURL-pay response</h2>
-	{#if state.http}<h3>HTTP request</h3>
+	<h2><span>3</span> {m.fetch_lnurl_response()}</h2>
+	{#if state.http}<h3>{m.http_request()}</h3>
 		<dl>
-			<dt>Method</dt>
+			<dt>{m.field_method()}</dt>
 			<dd>{state.http.method}</dd>
-			<dt>Request URL</dt>
+			<dt>{m.field_request_url()}</dt>
 			<dd class="break">{state.http.url}</dd>
 		</dl>
 		{#if state.http.error}<p class="errors" role="alert">
 				✕ {state.http.error}
-			</p>{/if}{#if state.http.status !== undefined}<h3>HTTP response</h3>
+			</p>{/if}{#if state.http.status !== undefined}<h3>{m.http_response()}</h3>
 			<dl>
-				<dt>Status</dt>
+				<dt>{m.field_status()}</dt>
 				<dd>{state.http.status}</dd>
-				<dt>Status text</dt>
-				<dd>{state.http.statusText || '(empty)'}</dd>
+				<dt>{m.field_status_text()}</dt>
+				<dd>{state.http.statusText || m.ui_empty()}</dd>
 			</dl>{/if}
 		<div class="raw-grid grid">
 			<div>
-				<h3>Raw response body</h3>
-				<pre>{state.http.rawBody ?? '(unavailable)'}</pre>
+				<h3>{m.raw_response_body()}</h3>
+				<pre>{state.http.rawBody ?? m.ui_unavailable()}</pre>
 			</div>
 			<div>
-				<h3>Parsed JSON</h3>
+				<h3>{m.parsed_json()}</h3>
 				<pre>{state.http.json === undefined
-						? '(unavailable)'
+						? m.ui_unavailable()
 						: state.formattedJson(state.http.json)}</pre>
 			</div>
 		</div>
 		{#if state.lud06?.kind === 'error'}<div class="result">
-				<h3>LUD-06 error response</h3>
+				<h3>{m.lud06_error_response()}</h3>
 				<dl>
-					<dt>Status</dt>
+					<dt>{m.field_status()}</dt>
 					<dd>{state.lud06.status}</dd>
-					<dt>Reason</dt>
+					<dt>{m.field_reason()}</dt>
 					<dd>{state.lud06.reason}</dd>
 				</dl>
-				<p>payRequest validation was not continued.</p>
+				<p>{m.pay_request_not_continued()}</p>
 			</div>
 		{:else if state.lud06?.kind === 'payRequest'}<div class="result">
-				<h3>LUD-06 validation: {state.lud06.valid ? 'Valid' : 'Invalid'}</h3>
+				<h3>
+					{m.lud06_validation_result({ result: state.lud06.valid ? m.ui_valid() : m.ui_invalid() })}
+				</h3>
 				<ul class="checks">
 					{#each state.lud06.items as item (item.label)}<li class:failed={!item.valid}>
 							{item.valid ? '✓' : '✕'}
 							{item.label}
 						</li>{/each}
 				</ul>
-				<h3>Extracted output</h3>
+				<h3>{m.extracted_output()}</h3>
 				<dl>
 					<dt>Callback</dt>
-					<dd>{state.lud06.data.callback ?? '(unavailable)'}</dd>
-					<dt>Minimum (msat)</dt>
-					<dd>{state.lud06.data.minSendable ?? '(unavailable)'}</dd>
-					<dt>Maximum (msat)</dt>
-					<dd>{state.lud06.data.maxSendable ?? '(unavailable)'}</dd>
+					<dd>{state.lud06.data.callback ?? m.ui_unavailable()}</dd>
+					<dt>{m.field_minimum_msat()}</dt>
+					<dd>{state.lud06.data.minSendable ?? m.ui_unavailable()}</dd>
+					<dt>{m.field_maximum_msat()}</dt>
+					<dd>{state.lud06.data.maxSendable ?? m.ui_unavailable()}</dd>
 					<dt>allowsNostr</dt>
 					<dd>{state.formattedJson(state.lud06.data.allowsNostr)}</dd>
-					<dt>LNURL provider nostrPubkey</dt>
+					<dt>{m.field_provider_pubkey()}</dt>
 					<dd class="break">
 						{typeof state.lud06.data.nostrPubkey === 'string'
 							? state.lud06.data.nostrPubkey
-							: '(unavailable)'}
+							: m.ui_unavailable()}
 					</dd>
 				</dl>
 				<div class="raw-grid grid">
 					<div>
-						<h3>Raw metadata string</h3>
-						<pre>{state.lud06.data.metadata ?? '(unavailable)'}</pre>
+						<h3>{m.raw_metadata()}</h3>
+						<pre>{state.lud06.data.metadata ?? m.ui_unavailable()}</pre>
 					</div>
 					<div>
-						<h3>Parsed metadata</h3>
+						<h3>{m.parsed_metadata()}</h3>
 						<pre>{state.lud06.data.parsedMetadata === undefined
-								? '(unavailable)'
+								? m.ui_unavailable()
 								: state.formattedJson(state.lud06.data.parsedMetadata)}</pre>
 					</div>
 				</div>
 			</div>{/if}
 		{#if state.nip57}<div class="result">
 				<h3>
-					NIP-57 Zap support: {state.nip57.status === 'supported'
-						? 'Supported'
-						: state.nip57.status === 'not-supported'
-							? 'Not supported'
-							: 'Invalid advertisement'}
+					{m.nip57_support_result({
+						result:
+							state.nip57.status === 'supported'
+								? m.ui_supported()
+								: state.nip57.status === 'not-supported'
+									? m.ui_not_supported()
+									: m.ui_invalid_advertisement()
+					})}
 				</h3>
 				{#if state.nip57.reason}<p>
-						<strong>Reason:</strong>
+						<strong>{m.reason_prefix()}</strong>
 						{state.nip57.reason}
 					</p>{/if}
 				<ul class="checks">
@@ -179,6 +189,6 @@
 				</ul>
 			</div>{/if}
 	{:else}<p class="muted">
-			Review the resolved URL in Step 2, then explicitly run the GET request.
+			{m.fetch_response_prerequisite()}
 		</p>{/if}
 </section>

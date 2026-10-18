@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import QRCode from 'qrcode';
 
 	let { payload }: { payload: string } = $props();
@@ -15,7 +16,7 @@
 				if (active && payload === currentPayload) imageUrl = url;
 			})
 			.catch(() => {
-				if (active && payload === currentPayload) error = 'Failed to generate QR code';
+				if (active && payload === currentPayload) error = m.qr_generation_failed();
 			});
 		return () => {
 			active = false;
@@ -24,9 +25,9 @@
 </script>
 
 {#if imageUrl}
-	<img src={imageUrl} alt="QR code for opening this invoice in a Lightning wallet" />
+	<img src={imageUrl} alt={m.qr_invoice_alt()} />
 {:else if error}
-	<p class="errors" role="alert">✕ {error}. Use Copy invoice or Open wallet instead.</p>
+	<p class="errors" role="alert">✕ {m.qr_failure_instruction({ error })}</p>
 {:else}
-	<p class="muted" aria-live="polite">Generating QR code…</p>
+	<p class="muted" aria-live="polite">{m.qr_generating()}</p>
 {/if}

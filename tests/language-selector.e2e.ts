@@ -111,7 +111,21 @@ test.describe('language switching', () => {
 		await expectLocale(page, 'ja');
 		expect(page.url()).toBe(originalUrl);
 		await expect(page.getByLabel('Lightning Address')).toHaveValue('alice@example.com');
-		await expect(page.getByText('Not run', { exact: true })).toBeVisible();
+		await expect(page.getByText('未実行', { exact: true })).toBeVisible();
+		await expect(page.locator('section > h2')).toHaveText([
+			'1 Lightning Address を検証',
+			'2 LNURL-pay エンドポイントを解決',
+			'3 LNURL-pay レスポンスを取得・検証',
+			'4 Zap Request のパラメーターを検証',
+			'5 未署名の kind 9734 イベントを生成',
+			'6 NIP-07 で Zap Request に署名',
+			'7 Zap callback を GET で取得',
+			'8 BOLT11 invoice の金額を確認',
+			'9 invoice の description hash を検証',
+			'10 invoice を支払う',
+			'11 Zap Receipt を待機',
+			'12 Zap Receipt を検証'
+		]);
 		expect(operations).toEqual([]);
 		expect(errors).toEqual([]);
 	});
