@@ -37,6 +37,7 @@ describe('payment handoff gating', () => {
 		['invoice missing', { ...verified, invoice: undefined }],
 		['amount decode failure', { ...verified, decodedAmountMsat: undefined }],
 		['amount mismatch', { ...verified, decodedAmountMsat: 2000n }],
+		['direct description', { ...verified, descriptionHashStatus: 'direct-description' as const }],
 		['description hash failure', { ...verified, descriptionHashStatus: 'failure' as const }],
 		['description hash mismatch', { ...verified, descriptionHashStatus: 'mismatch' as const }]
 	])('rejects %s', (_name, gate) => {

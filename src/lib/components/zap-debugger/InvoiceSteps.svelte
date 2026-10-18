@@ -149,6 +149,11 @@
 				<h3>Verification result</h3>
 				{#if state.descriptionHashResult?.status === 'failure'}
 					<p class="errors" role="alert">✕ {state.descriptionHashResult.reason}</p>
+				{:else if state.descriptionHashResult?.status === 'direct-description'}
+					<p class="warning" role="status">
+						⚠ This invoice contains a direct description (d) instead of a description hash (h). It
+						is not a NIP-57 Zap invoice, so a Zap Receipt is not expected.
+					</p>
 				{:else if state.descriptionHashResult}
 					<dl>
 						<dt>Invoice description hash (h)</dt>

@@ -154,25 +154,26 @@ describe('BOLT11 description hash inspection', () => {
 		});
 	});
 
-	it('distinguishes missing h and a direct d description', () => {
-		expect(inspectBolt11DescriptionHash(invoiceWithFields([]))).toMatchObject({
-			status: 'missing',
-			reason: 'Invoice does not contain a description hash'
+	it('rejects an invoice with neither d nor h', async () => {
+		expect(await verifyBolt11DescriptionHash(invoiceWithFields([]), nip57Description)).toEqual({
+			status: 'failure',
+			reason: 'Invoice contains neither a direct description nor a description hash'
 		});
-		expect(
-			inspectBolt11DescriptionHash(
-				invoiceWithFields([field(13, bech32.toWords(new TextEncoder().encode('direct')))])
-			)
-		).toMatchObject({
-			status: 'missing',
+	});
+
+	it('distinguishes a direct description from a failure', async () => {
+		expect(await verifyBolt11DescriptionHash(officialAmountVector, nip57Description)).toEqual({
+			status: 'direct-description',
 			reason: 'Invoice contains a direct description instead of a description hash'
 		});
 	});
 
-	it('rejects an invoice containing both d and h fields', () => {
+	it('rejects an invoice containing both d and h fields', async () => {
 		const description = field(13, bech32.toWords(new TextEncoder().encode('direct')));
 		const hash = field(23, bech32.toWords(new Uint8Array(32)));
-		expect(inspectBolt11DescriptionHash(invoiceWithFields([description, hash]))).toEqual({
+		expect(
+			await verifyBolt11DescriptionHash(invoiceWithFields([description, hash]), nip57Description)
+		).toEqual({
 			status: 'failure',
 			reason: 'Invoice contains both a direct description and a description hash'
 		});
@@ -189,6 +190,20 @@ describe('BOLT11 description hash inspection', () => {
 			status: 'failure',
 			reason: 'Invoice description hash has an invalid length'
 		});
+	});
+
+	it('returns failures for malformed description hashes and decoding errors', async () => {
+		const hash = bech32.toWords(new Uint8Array(32));
+		const invalidPadding = [...hash.slice(0, -1), 1];
+		for (const invoice of [
+			invoiceWithFields([field(23, hash.slice(1))]),
+			invoiceWithFields([field(23, invalidPadding)]),
+			'not-an-invoice'
+		]) {
+			expect(await verifyBolt11DescriptionHash(invoice, nip57Description)).toMatchObject({
+				status: 'failure'
+			});
+		}
 	});
 
 	it('rejects a tagged field whose declared length crosses into the signature', () => {

@@ -9,10 +9,11 @@ export type Bolt11AmountResult =
 
 export type Bolt11DescriptionHashResult =
 	| { status: 'failure'; reason: string }
-	| { status: 'missing'; reason: string }
+	| { status: 'direct-description'; reason: string }
 	| { status: 'available'; descriptionHashHex: string };
 
 export type DescriptionHashVerificationResult =
+	| { status: 'direct-description'; reason: string }
 	| { status: 'failure'; reason: string; calculatedHashHex?: string }
 	| { status: 'match' | 'mismatch'; invoiceHashHex: string; calculatedHashHex: string };
 
@@ -148,10 +149,10 @@ export function inspectBolt11DescriptionHash(invoice: string): Bolt11Description
 		}
 		if (hashes.length === 0) {
 			return {
-				status: 'missing',
+				status: hasDirectDescription ? 'direct-description' : 'failure',
 				reason: hasDirectDescription
 					? 'Invoice contains a direct description instead of a description hash'
-					: 'Invoice does not contain a description hash'
+					: 'Invoice contains neither a direct description nor a description hash'
 			};
 		}
 		if (hashes.length > 1) {
@@ -197,7 +198,7 @@ export async function verifyBolt11DescriptionHash(
 	zapRequestJson: string
 ): Promise<DescriptionHashVerificationResult> {
 	const inspection = inspectBolt11DescriptionHash(invoice);
-	if (inspection.status !== 'available') return { status: 'failure', reason: inspection.reason };
+	if (inspection.status !== 'available') return inspection;
 	const calculatedHashHex = await sha256Utf8Hex(zapRequestJson);
 	return {
 		status: calculatedHashHex === inspection.descriptionHashHex ? 'match' : 'mismatch',

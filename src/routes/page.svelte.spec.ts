@@ -278,5 +278,39 @@ describe('Zap debugger protocol boundaries', () => {
 		await page.getByRole('button', { name: 'Stop waiting' }).click();
 		expect(socket.sent).toContain(JSON.stringify(['CLOSE', request[1]]));
 		expect(socket.close).toHaveBeenCalledOnce();
+
+		const descriptionWords = bech32.toWords(new TextEncoder().encode('Coffee'));
+		const directInvoice = bech32.encode(
+			'lnbc10n',
+			[
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				0,
+				13,
+				0,
+				descriptionWords.length,
+				...descriptionWords,
+				...Array(104).fill(0)
+			],
+			false
+		);
+		fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ pr: directInvoice })));
+		await page.getByRole('button', { name: 'GET callback' }).click();
+		await page.getByRole('button', { name: 'Decode invoice' }).click();
+		await page.getByRole('button', { name: 'Verify description hash' }).click();
+		const warning = page.getByText(
+			'⚠ This invoice contains a direct description (d) instead of a description hash (h). It is not a NIP-57 Zap invoice, so a Zap Receipt is not expected.'
+		);
+		await expect.element(warning).toHaveClass('warning');
+		await expect.element(warning).toHaveAttribute('role', 'status');
+		await expect
+			.element(page.getByRole('button', { name: 'Copy invoice' }))
+			.not.toBeInTheDocument();
+		await expect.element(page.getByRole('link', { name: 'Open wallet' })).not.toBeInTheDocument();
+		expect(MockWebSocket.instances).toHaveLength(1);
 	});
 });
