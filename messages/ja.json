@@ -1,6 +1,5 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-	"hello_world": "Hello, {name} from ja!",
 	"language_label": "言語",
 	"page_eyebrow": "プロトコルインスペクター",
 	"page_intro": "Lightning Address の解決をステップごとに実行し、各段階の値を確認できます。",
