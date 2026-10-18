@@ -6,6 +6,19 @@
 	} from '$lib/protocol/zap-receipt-subscription';
 	import type { ZapDebuggerState } from '$lib/zap-debugger-state.svelte';
 
+	const checkLevelMessages = {
+		required: m.receipt_level_required,
+		recommended: m.receipt_level_recommended,
+		diagnostic: m.receipt_level_diagnostic
+	};
+	const checkStatusMessages = {
+		pass: m.receipt_status_pass,
+		fail: m.receipt_status_fail,
+		warning: m.receipt_status_warning,
+		'not-applicable': m.receipt_status_not_applicable,
+		'not-checked': m.receipt_status_not_checked
+	};
+
 	let { state }: { state: ZapDebuggerState } = $props();
 </script>
 
@@ -130,9 +143,9 @@
 								<li class={state.checkClass(check)}>
 									<strong>{state.checkMark(check)} {check.label}</strong>
 									<small
-										>{check.level.toUpperCase()} · {check.status}{check.detail
-											? ` · ${check.detail}`
-											: ''}</small
+										>{checkLevelMessages[check.level]()} · {checkStatusMessages[
+											check.status
+										]()}{check.detail ? ` · ${check.detail}` : ''}</small
 									>
 								</li>
 							{/each}

@@ -316,5 +316,20 @@
 	"diagnostic_http_status": "HTTP {status} で正常なレスポンスが返されませんでした。",
 	"diagnostic_fetch_failed": "ブラウザの fetch に失敗しました。ブラウザでは CORS エラーとネットワーク障害を区別できません。{detail}",
 	"diagnostic_value_unavailable": "取得不可",
-	"diagnostic_address_validated_required": "検証済みの Lightning Address が必要です。"
+	"diagnostic_address_validated_required": "検証済みの Lightning Address が必要です。",
+	"receipt_level_required": "必須",
+	"receipt_level_recommended": "推奨",
+	"receipt_level_diagnostic": "診断",
+	"receipt_status_pass": "合格",
+	"receipt_status_fail": "不合格",
+	"receipt_status_warning": "警告",
+	"receipt_status_not_applicable": "該当なし",
+	"receipt_status_not_checked": "未確認",
+	"invoice_amount_status_missing": "なし",
+	"invoice_amount_status_failure": "解析失敗",
+	"invoice_amount_status_unspecified": "金額未指定",
+	"description_hash_status_match": "一致",
+	"description_hash_status_mismatch": "不一致",
+	"description_hash_status_failure": "検証失敗",
+	"description_hash_status_direct_description": "直接の説明文"
 }
