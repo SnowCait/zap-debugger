@@ -27,6 +27,6 @@ export function isPaymentHandoffReady(gate: PaymentHandoffGate): boolean {
 		gate.requestedAmountMsat !== undefined &&
 		gate.decodedAmountMsat !== undefined &&
 		gate.decodedAmountMsat === gate.requestedAmountMsat &&
-		gate.descriptionHashStatus === 'match'
+		(gate.descriptionHashStatus === 'match' || gate.descriptionHashStatus === 'direct-description')
 	);
 }

@@ -301,16 +301,41 @@ describe('Zap debugger protocol boundaries', () => {
 		fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ pr: directInvoice })));
 		await page.getByRole('button', { name: 'GET callback' }).click();
 		await page.getByRole('button', { name: 'Decode invoice' }).click();
+		await expect
+			.element(page.getByRole('button', { name: 'Copy invoice' }))
+			.not.toBeInTheDocument();
 		await page.getByRole('button', { name: 'Verify description hash' }).click();
 		const warning = page.getByText(
 			'⚠ This invoice contains a direct description (d) instead of a description hash (h). It is not a NIP-57 Zap invoice, so a Zap Receipt is not expected.'
 		);
 		await expect.element(warning).toHaveClass('warning');
 		await expect.element(warning).toHaveAttribute('role', 'status');
+		const paymentStepHeading = page.getByRole('heading', { name: '10 Pay invoice' });
+		const paymentStep = page.elementLocator(paymentStepHeading.element().closest('section')!);
+		const paymentWarning = paymentStep.getByText(
+			'⚠ This is a regular Lightning invoice, not a NIP-57 Zap invoice. Payment may succeed, but a Zap Receipt is not expected.'
+		);
+		await expect.element(paymentWarning).toHaveClass('warning');
 		await expect
-			.element(page.getByRole('button', { name: 'Copy invoice' }))
+			.element(paymentStep.getByRole('link', { name: 'Open wallet' }))
+			.toHaveAttribute('href', `lightning:${directInvoice}`);
+		await expect
+			.element(paymentStep.getByAltText('QR code for opening this invoice in a Lightning wallet'))
+			.toBeInTheDocument();
+		await expect
+			.element(paymentStep.getByText(`lightning:${directInvoice.toUpperCase()}`, { exact: true }))
+			.toBeInTheDocument();
+		await paymentStep.getByRole('button', { name: 'Copy invoice' }).click();
+		expect(writeText).toHaveBeenLastCalledWith(directInvoice);
+		await expect.element(paymentStep.getByText('✓ Copied')).toBeInTheDocument();
+		await expect
+			.element(
+				paymentStep.getByText('After paying the invoice, continue by waiting for the Zap Receipt.')
+			)
 			.not.toBeInTheDocument();
-		await expect.element(page.getByRole('link', { name: 'Open wallet' })).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole('button', { name: 'Wait for Zap Receipt' }))
+			.not.toBeInTheDocument();
 		expect(MockWebSocket.instances).toHaveLength(1);
 	});
 });

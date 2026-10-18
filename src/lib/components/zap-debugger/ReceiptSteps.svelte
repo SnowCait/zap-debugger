@@ -84,8 +84,8 @@
 		</div>
 	{:else}
 		<p class="muted">
-			Step 11 requires the verified payment handoff, signed Zap Request, recipient p tag, and at
-			least one relay from its relays tag.
+			Step 11 requires a matching invoice amount and Zap Request description hash, a signed Zap
+			Request, recipient p tag, and at least one relay from its relays tag.
 		</p>
 	{/if}
 </section>

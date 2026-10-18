@@ -29,15 +29,28 @@ describe('payment handoff gating', () => {
 		descriptionHashStatus: 'match' as const
 	};
 
-	it('allows a matching amount and description hash', () => {
-		expect(isPaymentHandoffReady(verified)).toBe(true);
-	});
+	it.each(['match', 'direct-description'] as const)(
+		'allows a matching amount with %s',
+		(descriptionHashStatus) => {
+			expect(isPaymentHandoffReady({ ...verified, descriptionHashStatus })).toBe(true);
+		}
+	);
+
+	it.each(['match', 'direct-description'] as const)(
+		'rejects an unavailable or mismatching amount with %s',
+		(descriptionHashStatus) => {
+			for (const decodedAmountMsat of [undefined, 2000n]) {
+				expect(
+					isPaymentHandoffReady({ ...verified, descriptionHashStatus, decodedAmountMsat })
+				).toBe(false);
+			}
+		}
+	);
 
 	it.each([
 		['invoice missing', { ...verified, invoice: undefined }],
-		['amount decode failure', { ...verified, decodedAmountMsat: undefined }],
-		['amount mismatch', { ...verified, decodedAmountMsat: 2000n }],
-		['direct description', { ...verified, descriptionHashStatus: 'direct-description' as const }],
+		['requested amount missing', { ...verified, requestedAmountMsat: undefined }],
+		['description hash unverified', { ...verified, descriptionHashStatus: undefined }],
 		['description hash failure', { ...verified, descriptionHashStatus: 'failure' as const }],
 		['description hash mismatch', { ...verified, descriptionHashStatus: 'mismatch' as const }]
 	])('rejects %s', (_name, gate) => {

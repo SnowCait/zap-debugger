@@ -10,7 +10,15 @@
 	<h2><span>10</span> Pay invoice</h2>
 	{#if state.paymentReady() && state.callbackResult?.kind === 'invoice' && state.invoiceAmountResult?.status === 'specified'}
 		{@const handoff = createPaymentHandoffValues(state.callbackResult.pr)}
-		<p>Pay this invoice with your Lightning wallet, then continue to the next step.</p>
+		{#if state.descriptionHashResult?.status === 'direct-description'}
+			<p class="warning" role="status">
+				⚠ This is a regular Lightning invoice, not a NIP-57 Zap invoice. Payment may succeed, but a
+				Zap Receipt is not expected.
+			</p>
+			<p>Pay this invoice with your Lightning wallet.</p>
+		{:else}
+			<p>Pay this invoice with your Lightning wallet, then continue to the next step.</p>
+		{/if}
 		<div class="grid">
 			<div>
 				<h3>Payment handoff</h3>
@@ -41,10 +49,13 @@
 				</dl>
 			</div>
 		</div>
-		<p class="notice">After paying the invoice, continue by waiting for the Zap Receipt.</p>
+		{#if state.descriptionHashResult?.status === 'match'}
+			<p class="notice">After paying the invoice, continue by waiting for the Zap Receipt.</p>
+		{/if}
 	{:else}
 		<p class="muted">
-			Payment handoff is available only after the invoice amount and description hash both match.
+			Payment handoff requires a matching invoice amount and either a matching description hash or a
+			direct description confirmed in Step 9.
 		</p>
 	{/if}
 </section>
