@@ -316,5 +316,20 @@
 	"diagnostic_http_status": "HTTP {status} did not provide a successful response.",
 	"diagnostic_fetch_failed": "Browser fetch failed. CORS and network failures cannot be distinguished by the browser.{detail}",
 	"diagnostic_value_unavailable": "unavailable",
-	"diagnostic_address_validated_required": "A validated Lightning Address is required."
+	"diagnostic_address_validated_required": "A validated Lightning Address is required.",
+	"receipt_level_required": "REQUIRED",
+	"receipt_level_recommended": "RECOMMENDED",
+	"receipt_level_diagnostic": "DIAGNOSTIC",
+	"receipt_status_pass": "pass",
+	"receipt_status_fail": "fail",
+	"receipt_status_warning": "warning",
+	"receipt_status_not_applicable": "not-applicable",
+	"receipt_status_not_checked": "not-checked",
+	"invoice_amount_status_missing": "missing",
+	"invoice_amount_status_failure": "failure",
+	"invoice_amount_status_unspecified": "unspecified",
+	"description_hash_status_match": "match",
+	"description_hash_status_mismatch": "mismatch",
+	"description_hash_status_failure": "failure",
+	"description_hash_status_direct_description": "direct-description"
 }

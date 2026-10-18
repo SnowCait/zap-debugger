@@ -293,4 +293,67 @@ it('localizes receipt diagnostics without changing checks, warnings, hashes, or 
 	expect(check(japanese, 'content').detail).toBe('長さ: 11');
 	expect(check(japanese, 'lnurl').label).toContain('一致することが推奨される（SHOULD）');
 	expect(japanese.receiptDescription).toBe(base.exact);
+	expect(check(english, 'description-hash').detail).toBe('match');
+	expect(check(japanese, 'description-hash').detail).toBe('一致');
 });
+
+it.each([
+	['malformed', 'failure', '解析失敗', 'failure', '検証失敗'],
+	['amountless', 'unspecified', '金額未指定', 'match', '一致'],
+	['missing', 'missing', 'なし', 'match', '一致'],
+	['different-description', undefined, undefined, 'mismatch', '不一致'],
+	['direct-description', undefined, undefined, 'direct-description', '直接の説明文']
+])(
+	'localizes %s invoice diagnostics without changing decisions',
+	async (scenario, amountEnglish, amountJapanese, hashEnglish, hashJapanese) => {
+		const base = await fixture();
+		let currentInvoice: string = base.bolt11;
+		if (scenario === 'malformed') currentInvoice = 'not-an-invoice';
+		if (scenario === 'amountless') currentInvoice = await invoice(base.exact, '');
+		if (scenario === 'different-description')
+			currentInvoice = await invoice('Different description');
+		if (scenario === 'direct-description')
+			currentInvoice = bech32.encode(
+				'lnbc10n',
+				[
+					...Array(7).fill(0),
+					...field(13, bech32.toWords(new TextEncoder().encode('Original description'))),
+					...Array(104).fill(0)
+				],
+				false
+			);
+		const tags = base.receipt.tags
+			.filter((tag) => scenario !== 'missing' || tag[0] !== 'bolt11')
+			.map((tag) => (tag[0] === 'bolt11' ? ['bolt11', currentInvoice] : tag));
+		const candidate = await signedReceipt(tags);
+		const input = {
+			candidate,
+			signedZapRequest: base.zapRequest,
+			exactZapRequestJson: base.exact,
+			currentInvoice,
+			providerNostrPubkey: pubkey,
+			currentLnurl: lnurl
+		};
+		const english = await validateZapReceipt(input);
+		locale.value = 'ja';
+		const japanese = await validateZapReceipt(input);
+		expect(check(english, 'description-hash').detail).toBe(hashEnglish);
+		expect(check(japanese, 'description-hash').detail).toBe(hashJapanese);
+		if (amountEnglish) {
+			expect(check(english, 'amount').detail).toBe(`Receipt invoice amount: ${amountEnglish}`);
+			expect(check(japanese, 'amount').detail).toBe(
+				`Zap Receipt の invoice の金額: ${amountJapanese}`
+			);
+		}
+		const decisions = (result: typeof english) => ({
+			valid: result.valid,
+			warningCount: result.warningCount,
+			checks: result.sections.flatMap((section) =>
+				section.checks.map(({ id, level, status }) => ({ id, level, status }))
+			)
+		});
+		expect(decisions(japanese)).toEqual(decisions(english));
+		expect(japanese.receiptDescription).toBe(base.exact);
+		expect(japanese.expectedDescription).toBe(base.exact);
+	}
+);

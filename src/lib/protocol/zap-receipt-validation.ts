@@ -262,7 +262,14 @@ export async function validateZapReceipt(
 						invoiceAmount: decoded.amountMsat.toString(),
 						requestAmount: amounts[0]
 					})
-				: m.diagnostic_invoice_amount_status({ status: decoded?.status ?? 'missing' })
+				: m.diagnostic_invoice_amount_status({
+						status:
+							decoded?.status === 'failure'
+								? m.invoice_amount_status_failure()
+								: decoded?.status === 'unspecified'
+									? m.invoice_amount_status_unspecified()
+									: m.invoice_amount_status_missing()
+					})
 		);
 	}
 	const lnurls = values(requestTags, 'lnurl');
@@ -293,7 +300,12 @@ export async function validateZapReceipt(
 			'description-hash',
 			m.diagnostic_receipt_hash_recommended(),
 			result.status === 'match',
-			result.status
+			{
+				match: m.description_hash_status_match,
+				mismatch: m.description_hash_status_mismatch,
+				failure: m.description_hash_status_failure,
+				'direct-description': m.description_hash_status_direct_description
+			}[result.status]()
 		);
 	}
 	const preimages = values(receiptTags, 'preimage');
