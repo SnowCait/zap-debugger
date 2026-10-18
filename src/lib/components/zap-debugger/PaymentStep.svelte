@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { m } from '$lib/paraglide/messages';
 	import InvoiceQr from '$lib/InvoiceQr.svelte';
 	import { createPaymentHandoffValues } from '$lib/protocol/payment-handoff';
 	import type { ZapDebuggerState } from '$lib/zap-debugger-state.svelte';
@@ -7,55 +8,55 @@
 </script>
 
 <section>
-	<h2><span>10</span> Pay invoice</h2>
+	<h2><span>10</span> {m.pay_invoice()}</h2>
 	{#if state.paymentReady() && state.callbackResult?.kind === 'invoice' && state.invoiceAmountResult?.status === 'specified'}
 		{@const handoff = createPaymentHandoffValues(state.callbackResult.pr)}
 		{#if state.descriptionHashResult?.status === 'direct-description'}
 			<p class="warning" role="status">
-				⚠ This is a regular Lightning invoice, not a NIP-57 Zap invoice. Payment may succeed, but a
-				Zap Receipt is not expected.
+				⚠ {m.regular_invoice_payment_warning()}
 			</p>
-			<p>Pay this invoice with your Lightning wallet.</p>
+			<p>{m.regular_invoice_payment_instruction()}</p>
 		{:else}
-			<p>Pay this invoice with your Lightning wallet, then continue to the next step.</p>
+			<p>{m.zap_invoice_payment_instruction()}</p>
 		{/if}
 		<div class="grid">
 			<div>
-				<h3>Payment handoff</h3>
+				<h3>{m.payment_handoff()}</h3>
 				<dl>
-					<dt>Amount (msat)</dt>
+					<dt>{m.field_amount_msat()}</dt>
 					<dd>{state.invoiceAmountResult.amountMsat.toString()}</dd>
 					<dt>Lightning invoice</dt>
 					<dd class="break">{state.callbackResult.pr}</dd>
 				</dl>
 				<div class="actions">
-					<button onclick={() => state.copyInvoice(handoff.clipboardValue)}>Copy invoice</button>
+					<button onclick={() => state.copyInvoice(handoff.clipboardValue)}
+						>{m.action_copy_invoice()}</button
+					>
 					<!-- A custom protocol URI must not be rewritten as an application route. -->
 					<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
-					<a class="button secondary" href={handoff.openWalletUri}>Open wallet</a>
+					<a class="button secondary" href={handoff.openWalletUri}>{m.action_open_wallet()}</a>
 				</div>
 				{#if state.copyStatus === 'copied'}
-					<p class="success" role="status">✓ Copied</p>
+					<p class="success" role="status">✓ {m.invoice_copied()}</p>
 				{:else if state.copyStatus === 'failed'}
-					<p class="errors" role="alert">✕ Failed to copy invoice</p>
+					<p class="errors" role="alert">✕ {m.invoice_copy_failed()}</p>
 				{/if}
 			</div>
 			<div>
-				<h3>QR code</h3>
+				<h3>{m.qr_code()}</h3>
 				<div class="qr"><InvoiceQr payload={handoff.qrPayload} /></div>
 				<dl>
-					<dt>QR payload</dt>
+					<dt>{m.qr_payload()}</dt>
 					<dd class="break">{handoff.qrPayload}</dd>
 				</dl>
 			</div>
 		</div>
 		{#if state.descriptionHashResult?.status === 'match'}
-			<p class="notice">After paying the invoice, continue by waiting for the Zap Receipt.</p>
+			<p class="notice">{m.after_zap_payment()}</p>
 		{/if}
 	{:else}
 		<p class="muted">
-			Payment handoff requires a matching invoice amount and either a matching description hash or a
-			direct description confirmed in Step 9.
+			{m.payment_prerequisite()}
 		</p>
 	{/if}
 </section>
