@@ -455,6 +455,7 @@ export function createZapDebuggerState() {
 		});
 	const receiptReady = () =>
 		paymentReady() &&
+		descriptionHashResult?.status === 'match' &&
 		signedRaw !== undefined &&
 		receiptRelays().length > 0 &&
 		receiptRecipient() !== undefined &&
