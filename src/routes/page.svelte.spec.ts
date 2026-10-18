@@ -1,5 +1,5 @@
 import { page } from 'vitest/browser';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import { bech32 } from '@scure/base';
 import { schnorr } from '@noble/curves/secp256k1.js';
@@ -7,6 +7,7 @@ import ZapDebugger from './+page.svelte';
 import { calculateNostrEventId } from '$lib/protocol/zap-receipt-validation';
 
 const pubkey = '79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798';
+let originalUrl = '';
 const secretKey = Uint8Array.from({ length: 32 }, (_, index) => (index === 31 ? 1 : 0));
 const hex = (value: Uint8Array) =>
 	Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -47,14 +48,25 @@ async function zapInvoice(description: string): Promise<{ invoice: string; hash:
 	return { invoice: bech32.encode('lnbc10n', words, false), hash };
 }
 
+beforeEach(() => {
+	originalUrl = window.location.href;
+});
+
 afterEach(() => {
+	window.history.replaceState({}, '', originalUrl);
 	delete window.nostr;
 	vi.unstubAllGlobals();
 });
 
 describe('Zap debugger protocol boundaries', () => {
 	it('prefills URL parameters without running validation or making requests', async () => {
-		window.history.replaceState({}, '', '/?lud16=alice%40example.com&npub=not-a-valid-npub');
+		const relays = 'wss://relay1.example\nwss://relay2.example';
+		const params = new URLSearchParams({
+			lud16: 'alice@example.com',
+			npub: 'not-a-valid-npub',
+			relays
+		});
+		window.history.replaceState({}, '', `/?${params}`);
 		const fetcher = vi.fn().mockResolvedValue(
 			new Response(
 				JSON.stringify({
@@ -83,7 +95,10 @@ describe('Zap debugger protocol boundaries', () => {
 
 		const recipientInput = page.getByLabelText('Recipient pubkey (hex or npub)');
 		await expect.element(recipientInput).toHaveValue('not-a-valid-npub');
-		await expect.element(page.getByText('Not run').last()).toBeInTheDocument();
+		const relaysInput = page.getByLabelText('Zap Receipt relays (one per line)');
+		await expect.element(relaysInput).toHaveValue(relays);
+		const zapStep = page.getByRole('heading', { name: '4 Validate Zap Request parameters' });
+		await expect.element(zapStep.element().closest('section')!).toHaveTextContent('Not run');
 		expect(fetcher).toHaveBeenCalledOnce();
 
 		await addressInput.fill('edited@example.com');
