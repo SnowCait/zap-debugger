@@ -1,3 +1,5 @@
+import type { DescriptionHashVerificationResult } from './bolt11';
+
 export interface PaymentHandoffValues {
 	clipboardValue: string;
 	openWalletUri: string;
@@ -8,7 +10,7 @@ export interface PaymentHandoffGate {
 	invoice?: string;
 	requestedAmountMsat?: bigint;
 	decodedAmountMsat?: bigint;
-	descriptionHashStatus?: 'match' | 'mismatch' | 'failure';
+	descriptionHashStatus?: DescriptionHashVerificationResult['status'];
 }
 
 export function createPaymentHandoffValues(invoice: string): PaymentHandoffValues {
