@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { bech32 } from '@scure/base';
 
 export type Bolt11Network = 'bitcoin' | 'testnet' | 'signet' | 'regtest';
@@ -37,18 +38,16 @@ function scanTaggedFields(invoice: string): TaggedFieldScan {
 	try {
 		const { words } = bech32.decode(invoice, false);
 		if (words.length < TIMESTAMP_WORDS + SIGNATURE_WORDS)
-			return { failure: 'BOLT11 data part is too short' };
+			return { failure: m.diagnostic_bolt11_short() };
 		const end = words.length - SIGNATURE_WORDS;
 		const fields = new Map<number, number[][]>();
 		let offset = TIMESTAMP_WORDS;
 		while (offset < end) {
-			if (offset + TAG_HEADER_WORDS > end)
-				return { failure: 'Malformed BOLT11 tagged field header' };
+			if (offset + TAG_HEADER_WORDS > end) return { failure: m.diagnostic_bolt11_header() };
 			const type = words[offset];
 			const length = words[offset + 1] * 32 + words[offset + 2];
 			offset += TAG_HEADER_WORDS;
-			if (offset + length > end)
-				return { failure: 'BOLT11 tagged field exceeds the data boundary' };
+			if (offset + length > end) return { failure: m.diagnostic_bolt11_boundary() };
 			const values = fields.get(type) ?? [];
 			values.push(words.slice(offset, offset + length));
 			fields.set(type, values);
@@ -57,7 +56,7 @@ function scanTaggedFields(invoice: string): TaggedFieldScan {
 		return { fields };
 	} catch (error) {
 		return {
-			failure: error instanceof Error ? error.message : 'BOLT11 tagged field decoding failed'
+			failure: error instanceof Error ? error.message : m.diagnostic_bolt11_decode_fields()
 		};
 	}
 }
@@ -71,13 +70,13 @@ function decodeSingleHashField(
 	if ('failure' in scan) return { status: 'failure', reason: scan.failure };
 	const values = scan.fields.get(type) ?? [];
 	if (values.length === 0)
-		return { status: 'missing', reason: `Invoice does not contain a ${name}` };
+		return { status: 'missing', reason: m.diagnostic_hash_missing({ name }) };
 	if (values.length > 1)
-		return { status: 'failure', reason: `Invoice contains multiple ${pluralName}` };
+		return { status: 'failure', reason: m.diagnostic_hash_multiple({ pluralName }) };
 	if (values[0].length !== DESCRIPTION_HASH_WORDS)
-		return { status: 'failure', reason: `Invoice ${name} has an invalid length` };
+		return { status: 'failure', reason: m.diagnostic_hash_length({ name }) };
 	const bytes = bech32.fromWords(values[0]);
-	if (bytes.length !== 32) return { status: 'failure', reason: `Invoice ${name} is not 256 bits` };
+	if (bytes.length !== 32) return { status: 'failure', reason: m.diagnostic_hash_bits({ name }) };
 	return { status: 'available', paymentHashHex: bytesToHex(bytes) };
 }
 
@@ -100,14 +99,12 @@ const MSAT_PER_UNIT: Record<string, bigint> = {
 
 export function parseBolt11Amount(amount: string): bigint {
 	const match = /^([1-9][0-9]*)([munp]?)$/.exec(amount);
-	if (!match)
-		throw new Error('Invoice amount must be a positive decimal integer without leading zeros');
+	if (!match) throw new Error(m.diagnostic_bolt11_amount_integer());
 
 	const value = BigInt(match[1]);
 	const multiplier = match[2];
 	if (multiplier === 'p') {
-		if (value % 10n !== 0n)
-			throw new Error('Pico-bitcoin amount does not represent an integer millisatoshi');
+		if (value % 10n !== 0n) throw new Error(m.diagnostic_bolt11_pico());
 		return value / 10n;
 	}
 	return value * MSAT_PER_UNIT[multiplier];
@@ -118,7 +115,7 @@ export function inspectBolt11Amount(invoice: string): Bolt11AmountResult {
 		// BOLT11 explicitly permits invoices beyond BIP-173's default 90-character limit.
 		const { prefix: humanReadablePart } = bech32.decode(invoice, false);
 		const match = /^(lnbcrt|lntbs|lnbc|lntb)(.*)$/.exec(humanReadablePart);
-		if (!match) return { status: 'failure', reason: 'Unknown Bitcoin network prefix' };
+		if (!match) return { status: 'failure', reason: m.diagnostic_bolt11_network() };
 
 		const prefix = match[1];
 		const network = NETWORKS[prefix];
@@ -129,7 +126,7 @@ export function inspectBolt11Amount(invoice: string): Bolt11AmountResult {
 	} catch (error) {
 		return {
 			status: 'failure',
-			reason: error instanceof Error ? error.message : 'BOLT11 amount decoding failed'
+			reason: error instanceof Error ? error.message : m.diagnostic_bolt11_decode_amount()
 		};
 	}
 }
@@ -144,26 +141,26 @@ export function inspectBolt11DescriptionHash(invoice: string): Bolt11Description
 		if (hasDirectDescription && hashes.length > 0) {
 			return {
 				status: 'failure',
-				reason: 'Invoice contains both a direct description and a description hash'
+				reason: m.diagnostic_bolt11_both_descriptions()
 			};
 		}
 		if (hashes.length === 0) {
 			return {
 				status: hasDirectDescription ? 'direct-description' : 'failure',
 				reason: hasDirectDescription
-					? 'Invoice contains a direct description instead of a description hash'
-					: 'Invoice contains neither a direct description nor a description hash'
+					? m.diagnostic_bolt11_direct_description()
+					: m.diagnostic_bolt11_no_description()
 			};
 		}
 		if (hashes.length > 1) {
-			return { status: 'failure', reason: 'Invoice contains multiple description hashes' };
+			return { status: 'failure', reason: m.diagnostic_bolt11_multiple_descriptions() };
 		}
 		if (hashes[0].length !== DESCRIPTION_HASH_WORDS) {
-			return { status: 'failure', reason: 'Invoice description hash has an invalid length' };
+			return { status: 'failure', reason: m.diagnostic_bolt11_description_length() };
 		}
 		const bytes = bech32.fromWords(hashes[0]);
 		if (bytes.length !== 32) {
-			return { status: 'failure', reason: 'Invoice description hash is not 256 bits' };
+			return { status: 'failure', reason: m.diagnostic_bolt11_description_bits() };
 		}
 		return {
 			status: 'available',
@@ -172,7 +169,7 @@ export function inspectBolt11DescriptionHash(invoice: string): Bolt11Description
 	} catch (error) {
 		return {
 			status: 'failure',
-			reason: error instanceof Error ? error.message : 'BOLT11 description hash decoding failed'
+			reason: error instanceof Error ? error.message : m.diagnostic_bolt11_decode_description()
 		};
 	}
 }

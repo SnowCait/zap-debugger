@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import {
 	inspectBolt11Amount,
 	verifyBolt11DescriptionHash,
@@ -535,7 +536,10 @@ export function createZapDebuggerState() {
 			return signing;
 		},
 		get signError() {
-			return signError;
+			// Preserve the internal sentinel used by refreshSignerAvailability.
+			return !signerAvailable && signError === 'NIP-07 signer is not available'
+				? m.diagnostic_error_signer_unavailable()
+				: signError;
 		},
 		get signedRaw() {
 			return signedRaw;

@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import type { ValidationItem } from './validation';
 
 export type MetadataEntry = [string, ...unknown[]];
@@ -69,33 +70,33 @@ export function validateLud06(value: unknown): Lud06Result {
 	const minSendable = parsedAmount(source.minSendable);
 	const maxSendable = parsedAmount(source.maxSendable);
 	const items: ValidationItem[] = [
-		{ label: 'tag === "payRequest"', valid: source.tag === 'payRequest' },
-		{ label: 'callback is present', valid: typeof source.callback === 'string' },
-		{ label: 'callback parses as a URL', valid: callbackValid },
-		{ label: 'minSendable is a safe integer number', valid: minValid },
-		{ label: 'maxSendable is a safe integer number', valid: maxValid },
-		{ label: 'minSendable >= 1', valid: minSendable !== undefined && minSendable >= 1 },
+		{ label: m.diagnostic_lud06_tag(), valid: source.tag === 'payRequest' },
+		{ label: m.diagnostic_lud06_callback_present(), valid: typeof source.callback === 'string' },
+		{ label: m.diagnostic_lud06_callback_url(), valid: callbackValid },
+		{ label: m.diagnostic_lud06_min_integer(), valid: minValid },
+		{ label: m.diagnostic_lud06_max_integer(), valid: maxValid },
+		{ label: m.diagnostic_lud06_minimum(), valid: minSendable !== undefined && minSendable >= 1 },
 		{
-			label: 'minSendable <= maxSendable',
+			label: m.diagnostic_lud06_range(),
 			valid: minSendable !== undefined && maxSendable !== undefined && minSendable <= maxSendable
 		},
-		{ label: 'metadata is a string', valid: typeof source.metadata === 'string' },
-		{ label: 'metadata parses as JSON', valid: metadataParses },
-		{ label: 'parsed metadata is an array', valid: Array.isArray(parsedMetadata) },
+		{ label: m.diagnostic_lud06_metadata_string(), valid: typeof source.metadata === 'string' },
+		{ label: m.diagnostic_lud06_metadata_json(), valid: metadataParses },
+		{ label: m.diagnostic_lud06_metadata_array(), valid: Array.isArray(parsedMetadata) },
 		{
-			label: 'every metadata entry is an array beginning with a type string',
+			label: m.diagnostic_lud06_metadata_entries(),
 			valid: metadataEntriesValid
 		},
-		{ label: 'metadata contains exactly one text/plain entry', valid: hasOnePlainText },
-		{ label: 'text/plain value is a string', valid: plainTextValueValid },
-		{ label: 'text/long-desc values are strings when present', valid: longDescriptionValuesValid },
+		{ label: m.diagnostic_lud06_plain_count(), valid: hasOnePlainText },
+		{ label: m.diagnostic_lud06_plain_string(), valid: plainTextValueValid },
+		{ label: m.diagnostic_lud06_long_string(), valid: longDescriptionValuesValid },
 		{
-			label: 'image metadata uses at most one PNG or JPEG entry',
+			label: m.diagnostic_lud06_image_count(),
 			valid: imageEntries.length <= 1
 		},
-		{ label: 'image metadata values are strings', valid: imageValuesAreStrings },
+		{ label: m.diagnostic_lud06_image_strings(), valid: imageValuesAreStrings },
 		{
-			label: `image metadata values are at most ${imageCharacterLimit} characters`,
+			label: m.diagnostic_image_limit({ imageCharacterLimit }),
 			valid: imageValuesWithinLimit
 		}
 	];

@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { schnorr } from '@noble/curves/secp256k1.js';
 import {
 	inspectBolt11Amount,
@@ -129,17 +130,17 @@ export async function validateZapReceipt(
 		}
 	}
 	const integrity = [
-		required('shape', 'Event shape', shape),
-		required('kind', 'Kind is 9735', event.kind === 9735),
+		required('shape', m.diagnostic_receipt_shape(), shape),
+		required('kind', m.diagnostic_receipt_kind(), event.kind === 9735),
 		required(
 			'event-id',
-			'Calculated event ID matches claimed event ID',
+			m.diagnostic_receipt_event_id(),
 			idMatches,
 			calculatedEventId
-				? `Claimed: ${String(event.id)} · Calculated: ${calculatedEventId}`
-				: 'Event fields cannot be serialized safely'
+				? m.diagnostic_event_ids({ claimed: String(event.id), calculated: calculatedEventId })
+				: m.diagnostic_receipt_serialize()
 		),
-		required('signature', 'BIP-340 Schnorr signature over calculated event ID', signatureValid)
+		required('signature', m.diagnostic_receipt_signature(), signatureValid)
 	];
 	const receiptTags = validTags(event.tags) ? event.tags : [];
 	const request = record(input.signedZapRequest) ? input.signedZapRequest : {};
@@ -152,7 +153,7 @@ export async function validateZapReceipt(
 				label,
 				level: 'required',
 				status: 'not-applicable',
-				detail: `Zap Request has no ${name} tag`
+				detail: m.diagnostic_request_tag_missing({ name })
 			};
 		return required(
 			`${name}-tag`,
@@ -163,7 +164,7 @@ export async function validateZapReceipt(
 	const pExpected = values(requestTags, 'p');
 	const pCheck = required(
 		'p-tag',
-		'Recipient p tag matches Zap Request',
+		m.diagnostic_receipt_recipient(),
 		pExpected.length > 0 && pExpected.every((v) => values(receiptTags, 'p').includes(v))
 	);
 	const sender = typeof request.pubkey === 'string' ? request.pubkey : undefined;
@@ -172,14 +173,14 @@ export async function validateZapReceipt(
 		capitalP.length === 0
 			? {
 					id: 'P-tag',
-					label: 'Optional sender P tag',
+					label: m.diagnostic_receipt_sender_optional(),
 					level: 'diagnostic',
 					status: 'not-applicable',
-					detail: 'Not present'
+					detail: m.diagnostic_receipt_absent()
 				}
 			: required(
 					'P-tag',
-					'Optional sender P tag matches Zap Request pubkey',
+					m.diagnostic_receipt_sender_match(),
 					sender !== undefined && capitalP.every((v) => v === sender)
 				);
 	const bolt11s = values(receiptTags, 'bolt11');
@@ -188,27 +189,28 @@ export async function validateZapReceipt(
 	const description = descriptions.find((value) => value === input.exactZapRequestJson);
 	const structure = [
 		pCheck,
-		relationship('e', 'Applicable e tag copied from Zap Request'),
-		relationship('a', 'Applicable a tag copied from Zap Request'),
+		relationship('e', m.diagnostic_receipt_e_tag()),
+		relationship('a', m.diagnostic_receipt_a_tag()),
 		pSenderCheck,
-		required('bolt11', 'BOLT11 tag contains current callback invoice', bolt11 !== undefined),
-		required(
-			'description',
-			'Description exactly matches Zap Request JSON sent to callback',
-			description !== undefined
-		),
+		required('bolt11', m.diagnostic_receipt_invoice(), bolt11 !== undefined),
+		required('description', m.diagnostic_receipt_description(), description !== undefined),
 		recommended(
 			'content',
-			'Receipt content SHOULD be empty',
+			m.diagnostic_receipt_content_empty(),
 			event.content === '',
-			`Length: ${typeof event.content === 'string' ? event.content.length : 'unavailable'}`
+			m.diagnostic_content_length({
+				length:
+					typeof event.content === 'string'
+						? event.content.length
+						: m.diagnostic_value_unavailable()
+			})
 		)
 	];
 	let descriptionJsonCheck = diagnostic(
 		'description-json',
-		'Receipt description parses as JSON',
+		m.diagnostic_receipt_description_json(),
 		'not-applicable',
-		'Description tag is missing'
+		m.diagnostic_receipt_description_missing()
 	);
 	const receiptDescription = descriptions[0];
 	if (receiptDescription !== undefined) {
@@ -216,20 +218,20 @@ export async function validateZapReceipt(
 			JSON.parse(receiptDescription);
 			descriptionJsonCheck = diagnostic(
 				'description-json',
-				'Receipt description parses as JSON',
+				m.diagnostic_receipt_description_json(),
 				'pass'
 			);
 		} catch {
 			descriptionJsonCheck = diagnostic(
 				'description-json',
-				'Receipt description parses as JSON',
+				m.diagnostic_receipt_description_json(),
 				'fail'
 			);
 		}
 	}
 	const author = required(
 		'author',
-		'Receipt author matches LNURL provider nostrPubkey',
+		m.diagnostic_receipt_author(),
 		event.pubkey === input.providerNostrPubkey.toLowerCase()
 	);
 	const amounts = values(requestTags, 'amount');
@@ -237,10 +239,10 @@ export async function validateZapReceipt(
 	if (amounts.length === 0)
 		amountCheck = {
 			id: 'amount',
-			label: 'Receipt invoice amount matches Zap Request amount',
+			label: m.diagnostic_receipt_amount(),
 			level: 'required',
 			status: 'not-applicable',
-			detail: 'Zap Request has no amount tag'
+			detail: m.diagnostic_receipt_amount_missing()
 		};
 	else {
 		const decoded = bolt11 !== undefined ? inspectBolt11Amount(bolt11) : undefined;
@@ -253,11 +255,14 @@ export async function validateZapReceipt(
 		})();
 		amountCheck = required(
 			'amount',
-			'Amount in receipt bolt11 matches Zap Request amount',
+			m.diagnostic_receipt_amount_match(),
 			matches,
 			decoded?.status === 'specified'
-				? `Receipt invoice: ${decoded.amountMsat} msat · Zap Request: ${amounts[0]} msat`
-				: `Receipt invoice amount: ${decoded?.status ?? 'missing'}`
+				? m.diagnostic_invoice_amounts({
+						invoiceAmount: decoded.amountMsat.toString(),
+						requestAmount: amounts[0]
+					})
+				: m.diagnostic_invoice_amount_status({ status: decoded?.status ?? 'missing' })
 		);
 	}
 	const lnurls = values(requestTags, 'lnurl');
@@ -265,28 +270,28 @@ export async function validateZapReceipt(
 		lnurls.length === 0
 			? {
 					id: 'lnurl',
-					label: 'Zap Request lnurl matches current recipient LNURL',
+					label: m.diagnostic_receipt_lnurl(),
 					level: 'recommended',
 					status: 'not-applicable',
-					detail: 'Zap Request has no lnurl tag'
+					detail: m.diagnostic_receipt_lnurl_missing()
 				}
 			: recommended(
 					'lnurl',
-					'Zap Request lnurl SHOULD match current recipient LNURL',
+					m.diagnostic_receipt_lnurl_recommended(),
 					lnurls.every((value) => value === input.currentLnurl)
 				);
 	const authorization = [author, amountCheck, lnurlCheck];
 	let hashCheck = diagnostic(
 		'description-hash',
-		'SHA256(receipt description) matches invoice h field',
+		m.diagnostic_receipt_hash(),
 		'not-applicable',
-		'Description tag is missing'
+		m.diagnostic_receipt_description_missing()
 	);
 	if (receiptDescription !== undefined) {
 		const result = await verifyBolt11DescriptionHash(input.currentInvoice, receiptDescription);
 		hashCheck = recommended(
 			'description-hash',
-			'SHA256(receipt description) SHOULD match invoice h field',
+			m.diagnostic_receipt_hash_recommended(),
 			result.status === 'match',
 			result.status
 		);
@@ -294,18 +299,18 @@ export async function validateZapReceipt(
 	const preimages = values(receiptTags, 'preimage');
 	let preimageCheck = diagnostic(
 		'preimage',
-		'Optional preimage matches BOLT11 payment hash',
+		m.diagnostic_receipt_preimage(),
 		'not-applicable',
-		'Not present; a receipt is not cryptographic proof of payment'
+		m.diagnostic_receipt_preimage_absent()
 	);
 	if (preimages.length > 0) {
 		const preimage = preimages[0];
 		if (!HEX_64.test(preimage))
 			preimageCheck = diagnostic(
 				'preimage',
-				'Optional preimage matches BOLT11 payment hash',
+				m.diagnostic_receipt_preimage(),
 				'fail',
-				'Preimage is not 32-byte lowercase hex; a receipt is not payment proof'
+				m.diagnostic_receipt_preimage_invalid()
 			);
 		else {
 			const digest = await crypto.subtle.digest('SHA-256', bytes(preimage));
@@ -315,11 +320,11 @@ export async function validateZapReceipt(
 			const paymentHash = inspectBolt11PaymentHash(bolt11 ?? input.currentInvoice);
 			preimageCheck = diagnostic(
 				'preimage',
-				'Optional preimage matches BOLT11 payment hash',
+				m.diagnostic_receipt_preimage(),
 				paymentHash.status === 'available' && paymentHash.paymentHashHex === calculated
 					? 'pass'
 					: 'fail',
-				'Raw 32-byte preimage is hashed; a receipt is not cryptographic proof of payment'
+				m.diagnostic_receipt_preimage_hashed()
 			);
 		}
 	}
@@ -329,16 +334,16 @@ export async function validateZapReceipt(
 		preimageCheck,
 		diagnostic(
 			'paid-at',
-			'Receipt created_at vs invoice paid_at',
+			m.diagnostic_receipt_paid_at(),
 			'not-checked',
-			'Invoice paid_at is unavailable'
+			m.diagnostic_receipt_paid_at_missing()
 		)
 	];
 	const sections = [
-		{ title: 'NIP-01 Event Integrity', checks: integrity },
-		{ title: 'NIP-57 Receipt Structure', checks: structure },
-		{ title: 'Appendix F Authorization', checks: authorization },
-		{ title: 'Additional Diagnostics', checks: additional }
+		{ title: m.diagnostic_receipt_integrity_section(), checks: integrity },
+		{ title: m.diagnostic_receipt_structure_section(), checks: structure },
+		{ title: m.diagnostic_receipt_authorization_section(), checks: authorization },
+		{ title: m.diagnostic_receipt_additional_section(), checks: additional }
 	];
 	const all = sections.flatMap((section) => section.checks);
 	return {

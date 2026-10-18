@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 export type RelayConnectionState = 'connecting' | 'subscribed' | 'closed' | 'error';
 
 export type RelayStatus = {
@@ -102,7 +103,8 @@ export class ZapReceiptSubscriptionController {
 			} catch (error) {
 				this.updateRelay(generation, relay, {
 					state: 'error',
-					error: error instanceof Error ? error.message : 'WebSocket construction failed'
+					error:
+						error instanceof Error ? error.message : m.diagnostic_error_websocket_construction()
 				});
 				continue;
 			}
@@ -115,7 +117,7 @@ export class ZapReceiptSubscriptionController {
 				} catch (error) {
 					this.updateRelay(generation, relay, {
 						state: 'error',
-						error: error instanceof Error ? error.message : 'Failed to subscribe'
+						error: error instanceof Error ? error.message : m.diagnostic_error_subscribe()
 					});
 				}
 			};
@@ -124,7 +126,10 @@ export class ZapReceiptSubscriptionController {
 				this.handleMessage(generation, relay, subscriptionId, input.invoice, message.data);
 			};
 			socket.onerror = () =>
-				this.updateRelay(generation, relay, { state: 'error', error: 'WebSocket error' });
+				this.updateRelay(generation, relay, {
+					state: 'error',
+					error: m.diagnostic_error_websocket()
+				});
 			socket.onclose = () => this.updateRelay(generation, relay, { state: 'closed' });
 		}
 	}
@@ -162,7 +167,7 @@ export class ZapReceiptSubscriptionController {
 		try {
 			message = JSON.parse(raw);
 		} catch {
-			this.updateRelay(generation, relay, { error: 'Malformed relay message' });
+			this.updateRelay(generation, relay, { error: m.diagnostic_error_relay_message() });
 			return;
 		}
 		if (!Array.isArray(message) || typeof message[0] !== 'string') return;

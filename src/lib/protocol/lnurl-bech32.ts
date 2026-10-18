@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { bech32 } from '@scure/base';
 
 const textEncoder = new TextEncoder();
@@ -9,6 +10,6 @@ export function encodeLnurl(url: string): string {
 
 export function decodeLnurl(value: string): string {
 	const decoded = bech32.decode(value, 5000);
-	if (decoded.prefix !== 'lnurl') throw new Error('Expected an lnurl bech32 prefix');
+	if (decoded.prefix !== 'lnurl') throw new Error(m.diagnostic_error_lnurl_prefix());
 	return textDecoder.decode(bech32.fromWords(decoded.words));
 }

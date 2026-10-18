@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { bech32 } from '@scure/base';
 import { schnorr } from '@noble/curves/secp256k1.js';
 
@@ -45,9 +46,9 @@ export function parseRecipientPubkey(input: string): RecipientPubkeyResult {
 	}
 	const curveValid = normalized !== undefined && isValidXOnlyPubkey(normalized);
 	const checks = [
-		{ label: 'input is lowercase 64-character hex or a valid npub', valid: encodingValid },
-		{ label: 'recipient pubkey decoded to 32-byte lowercase hex', valid: normalized !== undefined },
-		{ label: 'recipient pubkey is a valid BIP-340 x-only public key', valid: curveValid }
+		{ label: m.diagnostic_key_encoding(), valid: encodingValid },
+		{ label: m.diagnostic_key_decoded(), valid: normalized !== undefined },
+		{ label: m.diagnostic_key_curve(), valid: curveValid }
 	];
 	return { input, normalized, format, checks, valid: checks.every((check) => check.valid) };
 }

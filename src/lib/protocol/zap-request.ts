@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import type { UnsignedNostrEvent } from './nostr-event';
 import type { ValidationItem } from './validation';
 
@@ -41,47 +42,47 @@ export function validateZapRequest(
 	const amountValue = amount[0]?.[1];
 	const parsedAmount = amountValue === undefined ? Number.NaN : Number(amountValue);
 	return [
-		{ label: 'kind === 9734', valid: event.kind === 9734 },
-		{ label: 'exactly one p tag', valid: p.length === 1 },
+		{ label: m.diagnostic_request_kind(), valid: event.kind === 9734 },
+		{ label: m.diagnostic_request_p_count(), valid: p.length === 1 },
 		{
-			label: 'p tag contains recipient hex pubkey',
+			label: m.diagnostic_request_p_recipient(),
 			valid: p.length === 1 && p[0]?.[1] === expected.recipientPubkey
 		},
-		{ label: 'exactly one relays tag', valid: relays.length === 1 },
+		{ label: m.diagnostic_request_relays_count(), valid: relays.length === 1 },
 		{
-			label: 'relays tag has at least one relay',
+			label: m.diagnostic_request_relays_present(),
 			valid: relays.length === 1 && (relays[0]?.length ?? 0) > 1
 		},
 		{
-			label: 'relays tag matches Step 4 relays',
+			label: m.diagnostic_request_relays_match(),
 			valid:
 				relays.length === 1 &&
 				JSON.stringify(relays[0]?.slice(1)) === JSON.stringify(expected.relays)
 		},
-		{ label: 'exactly one amount tag', valid: amount.length === 1 },
+		{ label: m.diagnostic_request_amount_count(), valid: amount.length === 1 },
 		{
-			label: 'amount tag equals Step 4 amount',
+			label: m.diagnostic_request_amount_match(),
 			valid: amount.length === 1 && amountValue === expected.amount.toString()
 		},
 		{
-			label: 'amount is within Step 3 range',
+			label: m.diagnostic_request_amount_range(),
 			valid:
 				Number.isSafeInteger(parsedAmount) &&
 				parsedAmount >= expected.minSendable &&
 				parsedAmount <= expected.maxSendable
 		},
-		{ label: 'exactly one lnurl tag', valid: lnurl.length === 1 },
+		{ label: m.diagnostic_request_lnurl_count(), valid: lnurl.length === 1 },
 		{
-			label: 'lnurl tag equals encoded LNURL-pay URL',
+			label: m.diagnostic_request_lnurl_match(),
 			valid: lnurl.length === 1 && lnurl[0]?.[1] === expected.lnurl
 		},
-		{ label: 'no e tag for this person zap', valid: tags('e').length === 0 },
-		{ label: 'no a tag', valid: tags('a').length === 0 },
-		{ label: 'no k tag', valid: tags('k').length === 0 },
-		{ label: 'no P tag', valid: tags('P').length === 0 },
-		{ label: 'content equals entered comment', valid: event.content === expected.comment },
+		{ label: m.diagnostic_request_e_absent(), valid: tags('e').length === 0 },
+		{ label: m.diagnostic_request_a_absent(), valid: tags('a').length === 0 },
+		{ label: m.diagnostic_request_k_absent(), valid: tags('k').length === 0 },
+		{ label: m.diagnostic_request_P_absent(), valid: tags('P').length === 0 },
+		{ label: m.diagnostic_request_content(), valid: event.content === expected.comment },
 		{
-			label: 'created_at is an integer Unix timestamp',
+			label: m.diagnostic_request_created_at(),
 			valid: Number.isInteger(event.created_at) && event.created_at >= 0
 		}
 	];

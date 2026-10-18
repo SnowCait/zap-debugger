@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 export type HttpInspection = {
 	method: 'GET';
 	url: string;
@@ -21,11 +22,11 @@ export async function fetchLnurlPay(
 		try {
 			inspection.json = JSON.parse(inspection.rawBody);
 		} catch {
-			inspection.error = 'Response body is not valid JSON.';
+			inspection.error = m.diagnostic_error_http_json();
 		}
 	} catch (error) {
 		const detail = error instanceof Error ? ` ${error.message}` : '';
-		inspection.error = `Browser fetch failed. CORS and network failures cannot be distinguished by the browser.${detail}`;
+		inspection.error = m.diagnostic_fetch_failed({ detail });
 	}
 	return inspection;
 }
