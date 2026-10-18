@@ -15,9 +15,11 @@
 		const params = new URLSearchParams(window.location.search);
 		const lightningAddress = params.get('lud16');
 		const recipientPubkey = params.get('npub');
+		const relays = params.get('relays');
 
 		if (lightningAddress !== null) debuggerState.changeInput(lightningAddress);
 		if (recipientPubkey !== null) debuggerState.changeZapParameter('recipient', recipientPubkey);
+		if (relays !== null) debuggerState.changeZapParameter('relays', relays);
 	});
 	onDestroy(debuggerState.dispose);
 </script>
