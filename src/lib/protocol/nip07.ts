@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import type { SignedNostrEvent, UnsignedNostrEvent } from './nostr-event';
 
 export type Nip07Signer = {
@@ -27,6 +28,6 @@ export async function requestSignature(
 	signer: Nip07Signer | undefined,
 	event: UnsignedNostrEvent
 ): Promise<SignedNostrEvent> {
-	if (!signer) throw new Error('NIP-07 signer is not available');
+	if (!signer) throw new Error(m.diagnostic_error_signer_unavailable());
 	return signer.signEvent(event);
 }

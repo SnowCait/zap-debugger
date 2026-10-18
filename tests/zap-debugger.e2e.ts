@@ -18,7 +18,7 @@ test('validates a Lightning Address from the production app', async ({ page }) =
 test.describe('Japanese UI', () => {
 	test.use({ locale: 'ja-JP' });
 
-	test('translates the UI while preserving raw responses, events, and diagnostic messages', async ({
+	test('translates the UI and diagnostics while preserving raw responses and events', async ({
 		page
 	}) => {
 		const errors: string[] = [];
@@ -56,7 +56,7 @@ test.describe('Japanese UI', () => {
 			.getByRole('button', { name: 'LNURL-pay エンドポイントを GET で取得', exact: true })
 			.click();
 		await expect(page.getByText('LUD-06 の検証: 有効', { exact: true })).toBeVisible();
-		await expect(page.getByText('metadata parses as JSON')).toBeVisible();
+		await expect(page.getByText('metadata を JSON として解析できる')).toBeVisible();
 		const rawResponse = page
 			.getByRole('heading', { name: 'レスポンス本文（未加工）', exact: true })
 			.locator('..')
@@ -73,6 +73,7 @@ test.describe('Japanese UI', () => {
 		const comment = 'Keep this English comment unchanged';
 		await page.getByLabel('コメント（任意）').fill(comment);
 		await page.getByRole('button', { name: 'パラメーターを検証', exact: true }).click();
+		await expect(page.getByText('amount >= minSendable（1000 msat）')).toBeVisible();
 		await page.getByRole('button', { name: 'Zap Request を生成', exact: true }).click();
 		const eventJson = await page
 			.getByRole('heading', { name: 'NIP-07 署名への入力', exact: true })

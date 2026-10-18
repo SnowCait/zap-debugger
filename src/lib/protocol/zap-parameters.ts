@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import type { ValidationItem } from './validation';
 
 export type AmountValidation = {
@@ -17,14 +18,14 @@ export function validateZapAmount(
 	const safeInteger = decimalInteger && Number.isSafeInteger(parsed);
 	const amount = safeInteger ? parsed : undefined;
 	const items: ValidationItem[] = [
-		{ label: 'amount is a decimal integer millisatoshi value', valid: safeInteger },
-		{ label: 'amount is positive', valid: amount !== undefined && amount > 0 },
+		{ label: m.diagnostic_parameters_amount_integer(), valid: safeInteger },
+		{ label: m.diagnostic_parameters_amount_positive(), valid: amount !== undefined && amount > 0 },
 		{
-			label: `amount >= minSendable (${minSendable} msat)`,
+			label: m.diagnostic_amount_min({ minSendable }),
 			valid: amount !== undefined && amount >= minSendable
 		},
 		{
-			label: `amount <= maxSendable (${maxSendable} msat)`,
+			label: m.diagnostic_amount_max({ maxSendable }),
 			valid: amount !== undefined && amount <= maxSendable
 		}
 	];
@@ -52,8 +53,8 @@ export function parseRelays(input: string): RelayValidation {
 		}
 	});
 	const items = [
-		{ label: 'at least one relay exists', valid: relays.length > 0 },
-		{ label: 'every relay URL uses ws: or wss:', valid: relays.length > 0 && everyValid }
+		{ label: m.diagnostic_parameters_relay_exists(), valid: relays.length > 0 },
+		{ label: m.diagnostic_parameters_relay_scheme(), valid: relays.length > 0 && everyValid }
 	];
 	return { input, relays, items, valid: items.every((item) => item.valid) };
 }

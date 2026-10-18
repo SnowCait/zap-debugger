@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import type { HttpInspection } from './http';
 
 export type ZapCallbackInput = {
@@ -35,23 +36,24 @@ export function interpretZapCallbackResponse(http: HttpInspection): ZapCallbackR
 	if (http.status !== undefined && (http.status < 200 || http.status >= 300)) {
 		return {
 			kind: 'missing',
-			reason: `HTTP ${http.status} did not provide a successful response.`
+			reason: m.diagnostic_http_status({ status: http.status })
 		};
 	}
 	const value = http.json;
 	if (typeof value !== 'object' || value === null) {
-		return { kind: 'missing', reason: 'The JSON response is not an object with a string pr.' };
+		return { kind: 'missing', reason: m.diagnostic_error_callback_object() };
 	}
 	const record = value as Record<string, unknown>;
 	if (record.status === 'ERROR') {
 		return {
 			kind: 'error',
-			reason: typeof record.reason === 'string' ? record.reason : '(reason unavailable)'
+			reason:
+				typeof record.reason === 'string' ? record.reason : m.diagnostic_error_reason_unavailable()
 		};
 	}
 	if (typeof record.pr === 'string') return { kind: 'invoice', pr: record.pr };
 	return {
 		kind: 'missing',
-		reason: 'The JSON response does not contain a string pr.'
+		reason: m.diagnostic_error_callback_pr()
 	};
 }

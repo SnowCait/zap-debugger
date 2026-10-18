@@ -1,3 +1,4 @@
+import { m } from '$lib/paraglide/messages';
 import { schnorr } from '@noble/curves/secp256k1.js';
 import type { ValidationItem } from './validation';
 
@@ -24,25 +25,26 @@ export function validateNip57(value: unknown): Nip57Result {
 		}
 	}
 	const items: ValidationItem[] = [
-		{ label: 'allowsNostr is present', valid: allowsPresent },
-		{ label: 'allowsNostr === true', valid: source.allowsNostr === true },
-		{ label: 'nostrPubkey is present', valid: pubkeyPresent },
-		{ label: 'nostrPubkey is 32-byte hex', valid: hex },
-		{ label: 'nostrPubkey is a valid BIP-340 public key', valid: curveValid }
+		{ label: m.diagnostic_nip57_allows_present(), valid: allowsPresent },
+		{ label: m.diagnostic_nip57_allows_true(), valid: source.allowsNostr === true },
+		{ label: m.diagnostic_nip57_pubkey_present(), valid: pubkeyPresent },
+		{ label: m.diagnostic_nip57_pubkey_hex(), valid: hex },
+		{ label: m.diagnostic_nip57_pubkey_valid(), valid: curveValid }
 	];
-	if (!allowsPresent) return { status: 'not-supported', reason: 'allowsNostr is missing', items };
+	if (!allowsPresent)
+		return { status: 'not-supported', reason: m.diagnostic_nip57_allows_missing(), items };
 	if (source.allowsNostr === false)
-		return { status: 'not-supported', reason: 'allowsNostr is false', items };
+		return { status: 'not-supported', reason: m.diagnostic_nip57_allows_false(), items };
 	if (source.allowsNostr !== true)
-		return { status: 'not-supported', reason: 'allowsNostr must be boolean true', items };
+		return { status: 'not-supported', reason: m.diagnostic_nip57_allows_boolean(), items };
 	if (!pubkeyPresent)
-		return { status: 'invalid-advertisement', reason: 'nostrPubkey is missing', items };
+		return { status: 'invalid-advertisement', reason: m.diagnostic_nip57_pubkey_missing(), items };
 	if (!hex)
-		return { status: 'invalid-advertisement', reason: 'nostrPubkey is not 32-byte hex', items };
+		return { status: 'invalid-advertisement', reason: m.diagnostic_nip57_pubkey_not_hex(), items };
 	if (!curveValid)
 		return {
 			status: 'invalid-advertisement',
-			reason: 'nostrPubkey is not a valid BIP-340 public key',
+			reason: m.diagnostic_nip57_pubkey_invalid(),
 			items
 		};
 	return { status: 'supported', items };

@@ -1,7 +1,16 @@
 import { schnorr } from '@noble/curves/secp256k1.js';
 import { bech32 } from '@scure/base';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { calculateNostrEventId, validateZapReceipt } from './zap-receipt-validation';
+
+const locale = vi.hoisted(() => ({ value: 'en' as 'en' | 'ja' }));
+vi.mock(import('$lib/paraglide/runtime'), async (importOriginal) => ({
+	...(await importOriginal()),
+	getLocale: () => locale.value
+}));
+afterEach(() => {
+	locale.value = 'en';
+});
 
 const hex = (value: Uint8Array) =>
 	Array.from(value, (byte) => byte.toString(16).padStart(2, '0')).join('');
@@ -248,4 +257,40 @@ describe('NIP-57 Appendix E and F checks', () => {
 		);
 		expect(check(await validate({ candidate }), 'preimage').status).toBe('fail');
 	});
+});
+
+it('localizes receipt diagnostics without changing checks, warnings, hashes, or raw descriptions', async () => {
+	const base = await fixture();
+	const candidate = await signedReceipt(base.receipt.tags, { content: 'wallet note' });
+	const input = {
+		candidate,
+		signedZapRequest: base.zapRequest,
+		exactZapRequestJson: base.exact,
+		currentInvoice: base.bolt11,
+		providerNostrPubkey: pubkey,
+		currentLnurl: 'lnurl1different'
+	};
+	const english = await validateZapReceipt(input);
+	locale.value = 'ja';
+	const japanese = await validateZapReceipt(input);
+	const decisions = (result: typeof english) => ({
+		...result,
+		sections: result.sections.map((section) =>
+			section.checks.map(({ id, level, status }) => ({ id, level, status }))
+		)
+	});
+	expect(decisions(japanese)).toEqual(decisions(english));
+	expect(japanese.valid).toBe(true);
+	expect(japanese.warningCount).toBe(2);
+	expect(english.sections[0].title).toBe('NIP-01 Event Integrity');
+	expect(japanese.sections[0].title).toBe('NIP-01 イベントの整合性');
+	expect(check(japanese, 'event-id').detail).toBe(
+		`申告値: ${candidate.id} · 計算値: ${candidate.id}`
+	);
+	expect(check(japanese, 'amount').detail).toBe(
+		'Zap Receipt の invoice: 1000 msat · Zap Request: 1000 msat'
+	);
+	expect(check(japanese, 'content').detail).toBe('長さ: 11');
+	expect(check(japanese, 'lnurl').label).toContain('一致することが推奨される（SHOULD）');
+	expect(japanese.receiptDescription).toBe(base.exact);
 });
